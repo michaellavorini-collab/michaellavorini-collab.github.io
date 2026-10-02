@@ -1,0 +1,15 @@
+{
+  "name": "spesa-furba",
+  "version": "1.0.0",
+  "description": "Spesa Furba: app personale per la spesa",
+  "scripts": {
+    "build": "esbuild src/claude.js --bundle --format=iife --minify --target=es2020 --outfile=claude.js && python3 build.py"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "esbuild": "^0.28.2"
+  },
+  "private": true
+}

@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f7a4a">
+<meta name="description" content="Lista della spesa, confronto prezzi, volantini, ricette, carte fedeltà e storico scontrini.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.45 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Spesa Furba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="claude.js"></script>
+</head>
+<body>
+<style>
+/* Layout: app a una colonna stile telefono, barra in basso con 4 sezioni; prezzi in mono come uno scontrino */
+:root{
+  --bg:#f3f6f2; --surface:#ffffff; --surface-2:#e8eee6; --fg:#17231b; --muted:#5d6e62; --line:#d3ddd2;
+  --accent:#1f7a4a; --accent-fg:#ffffff; --accent-soft:#d9efe1; --sun:#f2b632; --sun-soft:#fdf0cc; --danger:#b3362b;
+  --paper:#ffffff; --ink:#000000;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1712; --surface:#17221b; --surface-2:#1f2d24; --fg:#e6efe8; --muted:#97a99c; --line:#2c3d32;
+  --accent:#5cc98c; --accent-fg:#0b1a11; --accent-soft:#1c3a28; --sun:#f5c55a; --sun-soft:#3a3018; --danger:#f0786b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1712; --surface:#17221b; --surface-2:#1f2d24; --fg:#e6efe8; --muted:#97a99c; --line:#2c3d32;
+  --accent:#5cc98c; --accent-fg:#0b1a11; --accent-soft:#1c3a28; --sun:#f5c55a; --sun-soft:#3a3018; --danger:#f0786b; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:14px 110px;display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:800;font-size:28px;letter-spacing:-.02em;margin:0}
+h1 span{color:var(--accent)}
+h2{font-family:var(--f-display);font-weight:600;font-size:19px;margin:0;text-wrap:balance}
+.sync{font-size:12px;color:var(--muted)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row > .grow{flex:1 1 140px;min-width:0}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+textarea{min-height:90px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
+button.danger{color:var(--danger)}
+button:disabled{opacity:.55;cursor:default}
+.qty{width:76px;flex:0 0 76px}
+ul.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ul.items li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+ul.items li:last-child{border-bottom:0}
+ul.items li .name{flex:1;min-width:0;overflow-wrap:anywhere}
+ul.items li.done .name{text-decoration:line-through;color:var(--muted)}
+.check{width:24px;height:24px;flex:0 0 24px;border-radius:7px;border:2px solid var(--accent);background:transparent;padding:0}
+li.done .check{background:var(--accent)}
+li.done .check::after{content:"";display:block;width:6px;height:11px;border:solid var(--accent-fg);border-width:0 2.5px 2.5px 0;transform:translate(7px,2px) rotate(45deg)}
+.tag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.tag.offer{background:var(--sun-soft);color:var(--fg)}
+.tag.ok{background:var(--accent-soft);color:var(--accent)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.empty{text-align:center;padding:22px 10px;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+.store{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.store.best{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.store-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.store-name{font-weight:700;font-size:16px}
+.total{font-family:var(--f-mono);font-weight:700;font-size:22px;white-space:nowrap}
+.receipt{font-family:var(--f-mono);font-size:13px;display:flex;flex-direction:column;gap:2px;border-top:1px dashed var(--line);padding-top:8px}
+.receipt div{display:flex;justify-content:space-between;gap:10px}
+.receipt div span:first-child{min-width:0;overflow-wrap:anywhere}
+.receipt .src-v{color:var(--accent)}
+details summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
+.note{background:var(--sun-soft);border-radius:10px;padding:10px 12px;font-size:13px}
+.err{color:var(--danger);font-size:13px}
+.cardtile{border-radius:var(--r);padding:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);cursor:pointer;text-align:left;width:100%}
+.cardtile .mono{color:var(--muted);font-size:13px}
+.barcode-wrap{background:var(--paper);border-radius:12px;padding:16px;display:flex;justify-content:center;overflow-x:auto}
+.barcode-wrap svg{max-width:100%;height:auto}
+.bignum{font-family:var(--f-mono);font-size:22px;text-align:center;letter-spacing:.08em;color:var(--fg);overflow-wrap:anywhere}
+.recipe{display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.recipe:last-child{border-bottom:0;padding-bottom:0}
+.recipe ul{margin:0;padding-left:18px;font-size:14px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+nav.tabs button{border:0;background:transparent;flex-direction:column;gap:2px;font-size:11.5px;min-width:0;color:var(--muted);padding:6px 0;border-radius:10px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-current="true"]{color:var(--accent);background:var(--accent-soft)}
+.badge{font-family:var(--f-mono);font-size:10px;background:var(--sun);color:#1b1400;border-radius:999px;padding:0 6px;margin-left:2px}
+.spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spinner{animation-duration:3s}}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:var(--surface-2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .v{font-family:var(--f-mono);font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi .d{font-size:12px;color:var(--muted)}
+.chart svg{width:100%;height:auto;display:block}
+.chart .bar{fill:var(--accent)}
+.chart .bar.dim{fill:var(--accent);opacity:.45}
+.chart .hit{fill:transparent;cursor:pointer}
+.chart text{fill:var(--muted);font-family:var(--f-body);font-size:10px}
+.chart text.val{fill:var(--fg);font-family:var(--f-mono);font-weight:700}
+.chart line{stroke:var(--line);stroke-width:1}
+.chart-cap{font-size:13px;min-height:1.4em}
+.storebar{display:grid;grid-template-columns:minmax(0,1fr) 2fr auto;gap:8px;align-items:center;font-size:13px}
+.storebar .track{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.storebar .fill{height:100%;background:var(--accent);border-radius:4px}
+.rc{border-bottom:1px dashed var(--line);padding:8px 0}
+.rc:last-child{border-bottom:0}
+.rc summary{display:flex;justify-content:space-between;gap:10px;color:var(--fg);font-size:14px;list-style:none}
+.rc summary::-webkit-details-marker{display:none}
+.route-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:var(--accent-soft);border-radius:10px;padding:8px 10px}
+.route-bar strong{color:var(--accent)}
+ul.items li.aisle{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:6px 0 4px;border-bottom:2px solid var(--accent)}
+.aisle .n{font-family:var(--f-display);font-weight:600;font-size:15px}
+.aisle .step{font-family:var(--f-mono);font-size:12px;color:var(--accent);margin-right:6px}
+.aisle button{padding:2px 8px;font-size:13px}
+ul.items li.aisle.alldone .n{color:var(--muted);text-decoration:line-through}
+.sugg{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.sugg:last-child{border-bottom:0}
+.sugg .info{flex:1;min-width:0;display:flex;flex-direction:column}
+.sugg .info span:last-child{font-size:12px;color:var(--muted)}
+.offers-list{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.offers-list div{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.offers-list div span:first-child{min-width:0;overflow-wrap:anywhere}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Spesa<span>Furba</span></h1>
+    <span class="row" style="gap:6px;flex-wrap:nowrap"><span class="sync" id="sync">Avvio…</span><button type="button" class="ghost" id="openSettings" aria-label="Impostazioni"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button></span>
+  </header>
+  <div class="note" id="keyBanner" hidden>Per leggere foto, volantini e scontrini serve la tua chiave API di Claude. <button type="button" class="ghost" id="keyBannerBtn" style="padding:0;color:var(--accent);font-weight:700">Inseriscila ora</button></div>
+
+  <!-- LISTA -->
+  <section id="tab-lista" class="tab" style="display:flex;flex-direction:column;gap:16px">
+    <form class="panel" id="addForm" autocomplete="off">
+      <div class="lbl">Aggiungi alla lista</div>
+      <div class="row">
+        <input id="addName" class="grow" placeholder="Es. latte intero" aria-label="Prodotto">
+        <input id="addQty" class="qty" placeholder="1 l" aria-label="Quantità">
+        <button class="primary" type="submit">Aggiungi</button>
+      </div>
+    </form>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2>La tua lista</h2>
+        <span class="small muted" id="listCount"></span>
+      </div>
+      <div class="route-bar" id="routeBar" hidden></div>
+      <ul class="items" id="list"></ul>
+      <div class="row" id="listActions" hidden>
+        <button type="button" id="clearDone">Togli le spuntate</button>
+        <button type="button" class="danger" id="clearAll">Svuota lista</button>
+        <button type="button" class="primary" id="goCompare">Quanto spendo?</button>
+      </div>
+    </div>
+    <div class="panel" id="suggPanel">
+      <div class="row" style="justify-content:space-between">
+        <h2>Ti serve di solito</h2>
+        <button type="button" id="suggAll" hidden>Aggiungi tutti</button>
+      </div>
+      <div class="small muted" id="suggIntro"></div>
+      <div id="sugg"></div>
+    </div>
+  </section>
+
+  <!-- CONFRONTA -->
+  <section id="tab-confronta" class="tab" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <div class="lbl">Dove sei</div>
+      <div class="row">
+        <input id="zona" class="grow" placeholder="Città o CAP, es. Firenze 50127" aria-label="Zona">
+      </div>
+      <div class="row">
+        <button type="button" class="primary" id="gpsBtn">Usa la mia posizione</button>
+        <a class="btn" id="mapsNear" target="_blank" rel="noopener" href="https://www.google.com/maps/search/supermercati+vicino+a+me">Apri Maps ↗</a>
+      </div>
+      <div id="gpsMsg" class="small"></div>
+      <div id="nearby" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2>I tuoi supermercati</h2>
+      </div>
+      <div class="small muted">Tocca le catene dove vai di solito.</div>
+      <div class="chips" id="chainChips"></div>
+      <div class="row">
+        <input id="customChain" class="grow" placeholder="Altro supermercato" aria-label="Altro supermercato">
+        <button type="button" id="addChain">Aggiungi</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2>Carica i volantini</h2>
+        <span class="tag offer" id="offerCount">0 attive</span>
+      </div>
+      <div class="small muted">Claude cerca da solo i volantini in corso dei tuoi supermercati nella tua zona e ne carica le offerte. Puoi anche caricare un PDF, degli screenshot o la foto di un volantino di carta.</div>
+      <div class="row">
+        <select id="flyerStore" class="grow" aria-label="Supermercato del volantino"></select>
+        <label class="btn" id="flyerBtn" for="flyerFile">Carica volantino</label>
+        <input type="file" id="flyerFile" accept="image/*,application/pdf,.pdf" multiple class="vh" tabindex="-1">
+      </div>
+      <div class="row">
+        <button type="button" class="primary" id="webFlyer">Cerca offerte online</button>
+        <button type="button" id="webFlyerAll">Aggiorna tutti</button>
+      </div>
+      <div class="row small">
+        <a class="btn" id="flyerOnline" target="_blank" rel="noopener" href="#">Apri il volantino online ↗</a>
+        <a class="btn" id="flyerSearch" target="_blank" rel="noopener" href="#">Cerca su Google ↗</a>
+      </div>
+      <details class="small"><summary>Come caricare un volantino online</summary>
+        <ol style="margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+          <li>Scegli il supermercato e tocca <strong>Apri il volantino online</strong>.</li>
+          <li>Scarica il volantino in PDF, se il sito lo permette. Altrimenti fai uno screenshot di ogni pagina.</li>
+          <li>Torna qui, tocca <strong>Carica volantino</strong> e scegli il PDF o tutti gli screenshot insieme.</li>
+        </ol>
+        <div class="muted" style="margin-top:6px">Le offerte del nuovo volantino sostituiscono quelle vecchie dello stesso supermercato. Si leggono al massimo 16 pagine alla volta.</div>
+      </details>
+      <div class="row" id="flyerProg" hidden><span class="spinner"></span><span id="flyerProgTxt" class="small grow"></span><button type="button" class="ghost" id="flyerStop">Interrompi</button></div>
+      <div id="flyerMsg" class="small"></div>
+      <div id="offersByStore" class="offers-list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2>Confronto prezzi</h2>
+        <button type="button" class="primary" id="estimate">Calcola il costo</button>
+      </div>
+      <div id="estimateMsg" class="small muted">Calcola quanto costa la tua lista in ogni supermercato scelto.</div>
+      <div id="results" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </section>
+
+  <!-- RICETTE -->
+  <section id="tab-ricette" class="tab" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <div class="lbl">Nuova ricetta</div>
+      <div class="row">
+        <input id="recName" class="grow" placeholder="Es. lasagne alla bolognese" aria-label="Nome ricetta">
+        <input id="recServ" class="qty" type="number" min="1" value="4" aria-label="Porzioni">
+      </div>
+      <textarea id="recIngr" placeholder="Un ingrediente per riga, es.&#10;sfoglia per lasagne - 500 g&#10;macinato misto - 400 g" aria-label="Ingredienti"></textarea>
+      <div class="row">
+        <button type="button" class="primary" id="recSave">Salva ricetta</button>
+        <button type="button" id="recAi">Suggerisci ingredienti</button>
+      </div>
+      <div id="recMsg" class="small"></div>
+    </div>
+    <div class="panel">
+      <h2>Le tue ricette</h2>
+      <div id="recipes" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+  </section>
+
+  <!-- CARTE -->
+  <section id="tab-carte" class="tab" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel" id="cardShow" hidden>
+      <div class="row" style="justify-content:space-between">
+        <h2 id="cardShowName"></h2>
+        <button type="button" class="ghost" id="cardClose">Chiudi</button>
+      </div>
+      <div class="barcode-wrap"><svg id="barcode"></svg></div>
+      <div class="bignum" id="cardShowNum"></div>
+      <div class="small muted">Alza la luminosità dello schermo prima di passarla alla cassa.</div>
+      <button type="button" class="danger" id="cardDelete">Elimina questa carta</button>
+    </div>
+    <div class="panel">
+      <h2>Carte fedeltà</h2>
+      <div id="cards" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+    <form class="panel" id="cardForm" autocomplete="off">
+      <div class="lbl">Aggiungi una carta</div>
+      <input id="cardChain" placeholder="Supermercato, es. Coop" aria-label="Supermercato">
+      <input id="cardNum" inputmode="numeric" placeholder="Numero sotto il codice a barre" aria-label="Numero carta">
+      <select id="cardFmt" aria-label="Tipo di codice">
+        <option value="EAN13">EAN-13 (13 cifre, il più comune)</option>
+        <option value="CODE128">Code 128 (lettere e numeri)</option>
+        <option value="EAN8">EAN-8 (8 cifre)</option>
+      </select>
+      <div class="row">
+        <button class="primary" type="submit">Salva carta</button>
+        <label class="btn" id="cardPhotoBtn" for="cardPhoto">Fotografa il codice</label>
+        <input type="file" id="cardPhoto" accept="image/*" class="vh" tabindex="-1">
+      </div>
+      <div id="cardMsg" class="small"></div>
+    </form>
+  </section>
+
+  <!-- STORICO -->
+  <section id="tab-storico" class="tab" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2>Aggiungi uno scontrino</h2>
+      </div>
+      <div class="small muted">Fotografa lo scontrino intero. Se è lungo, fai più foto e selezionale tutte insieme.</div>
+      <div class="row">
+        <label class="btn primary" id="rcBtn" for="rcFile">Fotografa lo scontrino</label>
+        <input type="file" id="rcFile" accept="image/*" multiple class="vh" tabindex="-1">
+        <button type="button" id="rcManual">Inserisci a mano</button>
+      </div>
+      <div id="rcMsg" class="small"></div>
+      <form id="rcForm" hidden style="display:flex;flex-direction:column;gap:8px" autocomplete="off">
+        <div class="lbl">Controlla e salva</div>
+        <div class="row">
+          <input id="rcStore" class="grow" placeholder="Supermercato" aria-label="Supermercato">
+          <input id="rcDate" type="date" style="flex:0 0 150px" aria-label="Data">
+        </div>
+        <div class="row">
+          <label for="rcTotal" class="small muted">Totale pagato €</label>
+          <input id="rcTotal" inputmode="decimal" style="flex:0 0 120px" aria-label="Totale">
+        </div>
+        <div id="rcItemsPrev" class="receipt"></div>
+        <div class="row"><button type="submit" class="primary">Salva nello storico</button><button type="button" id="rcCancel">Annulla</button></div>
+      </form>
+    </div>
+
+    <div class="panel" id="histSummary">
+      <h2>Quanto spendi</h2>
+      <div class="kpis" id="kpis"></div>
+      <div class="lbl">Ultimi 12 mesi</div>
+      <div class="chart" id="chart"></div>
+      <div class="chart-cap" id="chartCap"></div>
+    </div>
+
+    <div class="panel" id="histStores" hidden>
+      <h2>Per supermercato <span class="small muted" id="storesYear"></span></h2>
+      <div id="storeBars" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <div class="panel" id="histPrices" hidden>
+      <h2>Quanto l'hai pagato</h2>
+      <input id="priceQ" placeholder="Cerca un prodotto, es. latte" aria-label="Cerca prodotto">
+      <div id="priceRes" class="receipt" style="border-top:0;padding-top:0"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Scontrini salvati</h2>
+      <div id="rcList"></div>
+    </div>
+  </section>
+
+  <!-- IMPOSTAZIONI -->
+  <section id="tab-impostazioni" class="tab" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <h2>Claude</h2>
+      <div class="small muted">Serve per leggere foto, volantini e scontrini, stimare i prezzi, cercare le offerte online e ordinare il percorso. La chiave resta salvata solo su questo telefono.</div>
+      <label class="lbl" for="apiKey">Chiave API</label>
+      <div class="row">
+        <input id="apiKey" class="grow" type="password" autocomplete="off" placeholder="sk-ant-…">
+        <button type="button" id="apiKeyShow" class="ghost">Mostra</button>
+      </div>
+      <label class="lbl" for="aiModel">Modello</label>
+      <select id="aiModel"></select>
+      <div class="row">
+        <button type="button" class="primary" id="apiSave">Salva e prova</button>
+        <a class="btn" href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Crea una chiave ↗</a>
+      </div>
+      <div id="apiMsg" class="small"></div>
+      <details class="small"><summary>Quanto costa</summary>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px" class="muted">
+          <span>Paghi solo quello che usi, sul tuo account Anthropic. Con Claude Opus 5.5, all'incirca: uno scontrino o una carta pochi centesimi; una pagina di volantino 1–3 centesimi; una ricerca dei volantini online 10–30 centesimi per supermercato.</span>
+          <span>Con Sonnet 5.5 i costi sono circa la metà. Sulla console Anthropic puoi impostare un limite di spesa mensile.</span>
+        </div>
+      </details>
+    </div>
+    <div class="panel">
+      <h2>Volantini automatici</h2>
+      <label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="autoFlyers" style="width:auto;margin-top:3px"> <span>Quando apri l'app, aggiorna da solo i volantini dei tuoi supermercati se sono scaduti o hanno più di 3 giorni.</span></label>
+    </div>
+    <div class="panel">
+      <h2>I tuoi dati</h2>
+      <div class="small muted">Lista, ricette, carte e scontrini sono salvati solo su questo telefono. Fai ogni tanto una copia di sicurezza.</div>
+      <div class="row">
+        <button type="button" id="backupSave">Salva una copia</button>
+        <label class="btn" for="backupFile">Ripristina da file</label>
+        <input type="file" id="backupFile" accept="application/json,.json" class="vh" tabindex="-1">
+      </div>
+      <div id="backupMsg" class="small"></div>
+    </div>
+    <div class="row"><button type="button" id="closeSettings">Torna all'app</button></div>
+    <div class="small muted" id="appVersion"></div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sezioni">
+  <button type="button" data-tab="lista" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor"/></svg>Lista</button>
+  <button type="button" data-tab="confronta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9.5" cy="20" r="1.3" fill="currentColor"/><circle cx="17" cy="20" r="1.3" fill="currentColor"/></svg><span>Confronta<span class="badge" id="navOffers" hidden></span></span></button>
+  <button type="button" data-tab="ricette"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0Z"/><path d="M9 7c0-1.5 1-2 1-3.5M14 7c0-1.5 1-2 1-3.5"/></svg>Ricette</button>
+  <button type="button" data-tab="carte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M7 10v4M10 10v4M12.5 10v4M15 10v4M17.5 10v4"/></svg>Carte</button>
+  <button type="button" data-tab="storico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Storico</button>
+</nav>
+
+<script>
+(function(){
+const CHAINS = ["Lidl","Eurospin","Esselunga","Coop","Conad","Carrefour","Pam","Penny","MD","Aldi","Despar","Iper"];
+const LS_KEY = "spesafurba.v1";
+const $ = s => document.querySelector(s);
+const eur = n => (typeof n === "number" && isFinite(n)) ? n.toLocaleString("it-IT",{style:"currency",currency:"EUR"}) : "—";
+const uid = () => Math.random().toString(36).slice(2,10);
+const today = () => new Date().toISOString().slice(0,10);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let state = blank();
+function blank(){ return {items:[], stores:[], offers:[], recipes:[], cards:[], zona:"", lastEstimate:null, route:null, layouts:{}, dismissed:{}, pos:null, nearby:[], flyerMeta:{}, autoFlyers:true, updatedAt:0}; }
+function normalize(s){ const b = blank(); for (const k in b) if (s && s[k] !== undefined) b[k] = s[k]; return b; }
+
+/* ---------- storage: db privato per utente, con copia locale ---------- */
+let docRef = null, saveTimer = null, sample = null, rcCol = null, sampleTried = false;
+let receipts = [];
+try { const raw = localStorage.getItem(LS_KEY + ".scontrini"); if (raw) receipts = JSON.parse(raw) || []; } catch(e){}
+function saveReceiptsLocal(){ try { localStorage.setItem(LS_KEY + ".scontrini", JSON.stringify(receipts)); } catch(e){} }
+try { const raw = localStorage.getItem(LS_KEY); if (raw) state = normalize(JSON.parse(raw)); } catch(e){}
+
+function setSync(t){ $("#sync").textContent = t; }
+function save(){
+  state.updatedAt = Date.now();
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e){}
+  render();
+  if (!docRef) return;
+  clearTimeout(saveTimer);
+  setSync("Salvataggio…");
+  saveTimer = setTimeout(async () => {
+    try { await docRef.set(JSON.parse(JSON.stringify(state))); setSync("Salvato"); }
+    catch(e){ setSync("Salvato solo su questo telefono"); }
+  }, 700);
+}
+
+async function boot(){
+  render();
+  setSync(state.updatedAt ? "Su questo telefono" : "");
+  if (!window.claude || !window.claude.use) { sampleTried = true; setSync("Salvato su questo telefono"); return; }
+  claude.use("sample").then(s => { sample = s; sampleTried = true; render(); });
+  const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
+  if (!db || !user) { setSync("Salvato su questo telefono"); return; }
+  const id = await user.id();
+  if (!id) { setSync("Salvato su questo telefono"); return; }
+  db.collection("offerte").onSnapshot(snap => { autoDocs = snap.docs.map(d => d.data()).filter(Boolean); render(); }, () => {});
+  docRef = db.collection("data/users/" + id).doc("stato");
+  rcCol = db.collection("data/users/" + id + "/stato/scontrini");
+  rcCol.onSnapshot(snap => {
+    const remote = snap.docs.map(d => d.data()).filter(Boolean);
+    const known = new Set(remote.map(r => r.id));
+    const localOnly = receipts.filter(r => !known.has(r.id));
+    receipts = [...remote, ...localOnly];
+    localOnly.forEach(r => rcCol.doc(r.id).set(r).catch(()=>{}));
+    saveReceiptsLocal(); render();
+  }, () => {});
+  docRef.onSnapshot(snap => {
+    if (snap.metadata && snap.metadata.hasPendingWrites) return;
+    const d = snap.exists ? snap.data() : null;
+    if (d && (d.updatedAt || 0) > (state.updatedAt || 0)) {
+      state = normalize(d);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e){}
+      render();
+    } else if (!d && state.updatedAt) {
+      docRef.set(JSON.parse(JSON.stringify(state))).catch(()=>{});
+    }
+    setSync("Sincronizzato");
+  }, () => setSync("Salvato su questo telefono"));
+}
+
+/* ---------- tabs ---------- */
+let currentTab = "lista";
+try { const t = localStorage.getItem(LS_KEY + ".tab"); if (t) currentTab = t; } catch(e){}
+function showTab(t){
+  currentTab = t;
+  document.querySelectorAll(".tab").forEach(s => s.hidden = s.id !== "tab-" + t);
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === t ? "true" : "false"));
+  try { localStorage.setItem(LS_KEY + ".tab", t); } catch(e){}
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* ---------- offerte ---------- */
+let autoDocs = [];
+function storeIdFor(chain){ const c = String(chain || "").toLowerCase().trim(); const s = state.stores.find(x => x.name.toLowerCase() === c); return s ? s.id : null; }
+function autoOffers(){
+  const out = [];
+  for (const d of autoDocs){
+    const sid = storeIdFor(d.catena); if (!sid) continue;
+    for (const o of (d.offerte || [])) out.push({id:"auto", storeId:sid, product:String(o.prodotto || ""), price:Number(o.prezzo), was:o.prezzoPrima != null ? Number(o.prezzoPrima) : null, until:d.validoFino || null, auto:true});
+  }
+  return out;
+}
+function activeOffers(){ const d = today(); return [...state.offers, ...autoOffers()].filter(o => o.product && isFinite(o.price) && (!o.until || o.until >= d)); }
+function words(s){ return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").split(/[^a-z0-9]+/).filter(w => w.length >= 4); }
+function offerMatchesItem(o, it){ const ow = words(o.product).join(" "); return words(it.name).some(w => ow.includes(w.slice(0, Math.max(4, w.length-1)))); }
+function matchingOffers(storeId){
+  const items = state.items.filter(i => !i.done);
+  return activeOffers().filter(o => o.storeId === storeId && items.some(it => offerMatchesItem(o, it)));
+}
+
+/* ---------- render ---------- */
+function render(){
+  renderExtra();
+  renderHistory();
+  renderSuggestions();
+  renderList(); renderStores(); renderOffers(); renderResults(); renderRecipes(); renderCards();
+  $("#zona").value !== state.zona && document.activeElement !== $("#zona") && ($("#zona").value = state.zona);
+  const n = activeOffers().length;
+  $("#navOffers").hidden = !n; $("#navOffers").textContent = n;
+
+}
+
+function renderList(){
+  const ul = $("#list"); ul.innerHTML = "";
+  const open = state.items.filter(i => !i.done).length;
+  $("#listCount").textContent = state.items.length ? `${open} da prendere · ${state.items.length - open} presi` : "";
+  $("#listActions").hidden = !state.items.length;
+  if (!state.items.length){
+    $("#routeBar").hidden = true;
+    ul.innerHTML = `<li class="empty" style="border:0"><div>La lista è vuota. Scrivi il primo prodotto qui sopra, oppure aggiungi gli ingredienti di una ricetta.</div><button type="button" id="demo">Prova con una lista d'esempio</button></li>`;
+    $("#demo").onclick = () => {
+      [["Latte intero","1 l"],["Pasta penne","500 g"],["Passata di pomodoro","700 g"],["Uova","6"],["Banane","1 kg"],["Parmigiano","200 g"],["Caffè macinato","250 g"]]
+        .forEach(([name,qty]) => state.items.push({id:uid(),name,qty,done:false}));
+      save();
+    };
+    return;
+  }
+  const routeStore = state.route && state.stores.find(x => x.id === state.route.storeId);
+  const bar = $("#routeBar");
+  bar.hidden = !routeStore;
+  if (!routeStore){
+    for (const it of [...state.items].sort((a,b) => a.done - b.done)) ul.appendChild(itemLi(it));
+    return;
+  }
+  const order = (state.layouts[routeStore.id] || []).slice();
+  const unsorted = state.items.filter(i => !i.reparto || !order.includes(i.reparto));
+  bar.innerHTML = `<span>Percorso a <strong>${esc(routeStore.name)}</strong>, nell'ordine degli scaffali</span><span class="row" style="gap:4px">${unsorted.length ? `<button type="button" id="routeResort">Ordina ${unsorted.length} nuov${unsorted.length === 1 ? "o" : "i"}</button>` : ""}<button type="button" class="ghost" id="routeOff">Lista normale</button></span>`;
+  $("#routeOff").onclick = () => { state.route = null; save(); };
+  if ($("#routeResort")) $("#routeResort").onclick = e => startRoute(routeStore.id, e.currentTarget, true);
+  const groups = order.map(n => ({n, items:state.items.filter(i => i.reparto === n)})).filter(g => g.items.length);
+  if (unsorted.length) groups.push({n:"Da sistemare", items:unsorted, extra:true});
+  groups.forEach((g, gi) => {
+    const allDone = g.items.every(i => i.done);
+    const h = document.createElement("li"); h.className = "aisle" + (allDone ? " alldone" : ""); h.style.listStyle = "none";
+    h.innerHTML = `<span><span class="step">${gi + 1}</span><span class="n">${esc(g.n)}</span></span>${g.extra ? "" : `<span class="row" style="gap:4px"><button type="button" aria-label="Sposta prima ${esc(g.n)}" ${gi === 0 ? "disabled" : ""}>↑</button><button type="button" aria-label="Sposta dopo ${esc(g.n)}" ${gi === groups.length - 1 || (groups[gi+1] && groups[gi+1].extra) ? "disabled" : ""}>↓</button></span>`}`;
+    if (!g.extra){
+      const [up, down] = h.querySelectorAll("button");
+      const move = dir => {
+        const lay = state.layouts[routeStore.id]; const a = lay.indexOf(g.n);
+        const visible = groups.filter(x => !x.extra).map(x => x.n);
+        const target = visible[visible.indexOf(g.n) + dir]; const b = lay.indexOf(target);
+        if (a < 0 || b < 0) return; [lay[a], lay[b]] = [lay[b], lay[a]]; save();
+      };
+      up.onclick = () => move(-1); down.onclick = () => move(1);
+    }
+    ul.appendChild(h);
+    for (const it of [...g.items].sort((a,b) => a.done - b.done)) ul.appendChild(itemLi(it));
+  });
+}
+function itemLi(it){
+  const hasOffer = activeOffers().some(o => offerMatchesItem(o, it));
+  const li = document.createElement("li");
+  if (it.done) li.className = "done";
+  li.innerHTML = `<button type="button" class="check" aria-label="${it.done ? "Rimetti" : "Segna come preso"}: ${esc(it.name)}"></button>
+    <span class="name">${esc(it.name)}${it.from ? ` <span class="small muted">· ${esc(it.from)}</span>` : ""}</span>
+    ${hasOffer && !it.done ? `<span class="tag offer">in offerta</span>` : ""}
+    <span class="mono small muted">${esc(it.qty)}</span>
+    <button type="button" class="ghost" aria-label="Elimina ${esc(it.name)}">✕</button>`;
+  li.querySelector(".check").onclick = () => { it.done = !it.done; save(); };
+  li.querySelector(".ghost").onclick = () => { state.items = state.items.filter(x => x !== it); save(); };
+  return li;
+}
+
+/* ---------- percorso tra gli scaffali ---------- */
+const REPARTI = [
+  ["Frutta e verdura", /(banan|mel[ae]|pere|aranc|limon|insalat|lattug|pomodor(?!o? ?pelat)|zucchin|carot|patat|cipoll|aglio|frutta|verdur|finocch|spinac|kiwi|uva|fragol|peperon|melanzan|funghi|basilico|prezzemol|rucola|avocado|zucca|broccol|cavol)/],
+  ["Pane e forno", /(pane|panin|focacc|grissin|crackers?|fette biscott|piadin|pancarr)/],
+  ["Salumi e formaggi", /(prosciut|salam|mortadel|speck|bresaol|parmig|grana|pecorin|mozzarell|stracchin|gorgonz|formagg|ricott|scamorz|provol|emmental|fontina)/],
+  ["Carne", /(pollo|tacchin|manzo|maial|vitell|macinat|salsicc|bistecc|hamburger|petto|cotolett|carne|wurstel)/],
+  ["Pesce", /(salmon|tonno fresco|merluzz|orata|branzin|gamber|pesce|cozze|vongol|calamar|polpo)/],
+  ["Latte, uova e frigo", /(latte(?! ?(di cocco|condensat))|yogurt|burro|panna|uova|uovo|mascarpon|pasta fresca|tortellin|gnocchi|affettat)/],
+  ["Pasta, riso e farine", /(pasta|spaghett|penne|fusill|rigaton|maccheron|lasagn|riso|farin|cous ?cous|orzo|farro|lievito)/],
+  ["Conserve e sughi", /(passata|pelat|sugo|ragu|pesto|tonno|legum|ceci|fagiol|lenticch|olive|sottolio|maionese|ketchup|senape|olio|aceto|sale|spezie|dado)/],
+  ["Colazione e dolci", /(caff|tè|te |tisan|biscott|merendin|cereal|marmellat|nutella|crema spalm|zucchero|miele|cioccolat|cornett|fette)/],
+  ["Bevande", /(acqua|vino|birra|succo|aranciata|cola|bibit|spumant|prosecc)/],
+  ["Surgelati", /(surgel|gelat|bastoncin|pizza surg|minestron|piselli)/],
+  ["Casa e pulizia", /(detersiv|ammorbid|candeggin|sgrassat|pellicol|alluminio|sacchi|spugn|carta (casa|igienic)|scottex|tovagliol|piatti|brillantant|pastiglie)/],
+  ["Igiene persona", /(shampoo|bagnoschiuma|sapone|dentifric|spazzolin|deodorant|assorbent|pannolin|rasoi|cotton|crema (viso|corpo|mani))/],
+];
+function localReparto(name){ const n = String(name).toLowerCase(); const r = REPARTI.find(([, re]) => re.test(n)); return r ? r[0] : "Altro"; }
+async function startRoute(storeId, btn, onlyNew){
+  const store = state.stores.find(x => x.id === storeId); if (!store) return;
+  const todo = onlyNew ? state.items.filter(i => !i.reparto || !(state.layouts[storeId] || []).includes(i.reparto)) : state.items;
+  if (!todo.length && !onlyNew){ state.route = {storeId}; save(); showTab("lista"); return; }
+  if (btn) busy(btn, true, "Ordino…");
+  let layout = null, map = {};
+  if (sample){
+    try {
+      const known = state.layouts[storeId] || [];
+      const r = await sample.json(`Il cliente fa la spesa da ${store.name}${state.zona ? " a " + state.zona : ""}, in Italia. Raggruppa questi prodotti per reparto e metti i reparti nell'ordine in cui si incontrano di solito camminando in un punto vendita ${store.name}, dall'ingresso alle casse (per esempio da molti discount la frutta e verdura è all'ingresso e i surgelati verso la fine).${known.length ? ` Il cliente ha già questo ordine di reparti per questo negozio, usa questi nomi e quest'ordine quando possibile: ${JSON.stringify(known)}.` : ""} Usa nomi di reparto brevi in italiano (es. "Frutta e verdura", "Latte, uova e frigo", "Casa e pulizia").
+Prodotti: ${JSON.stringify(todo.map((i, k) => ({k, nome:i.name})))}
+Rispondi SOLO con JSON: {"reparti":[{"nome":"...","prodotti":[0,1]}]}`, {modelTier:"quick"});
+      if (r && Array.isArray(r.reparti)) {
+        layout = r.reparti.map(x => String(x.nome || "").trim()).filter(Boolean);
+        r.reparti.forEach(x => (x.prodotti || []).forEach(k => { if (todo[k]) map[todo[k].id] = String(x.nome).trim(); }));
+      }
+    } catch(e){}
+  }
+  if (!layout){
+    layout = REPARTI.map(r => r[0]).concat("Altro");
+    todo.forEach(i => map[i.id] = localReparto(i.name));
+  }
+  todo.forEach(i => { i.reparto = map[i.id] || localReparto(i.name); });
+  const prevLay = state.layouts[storeId] || [];
+  const merged = onlyNew || prevLay.length ? [...prevLay] : [];
+  for (const n of layout) if (!merged.includes(n)) {
+    // inserisce un reparto nuovo subito dopo quello che lo precede nell'ordine proposto
+    const before = layout.slice(0, layout.indexOf(n)).reverse().find(x => merged.includes(x));
+    merged.splice(before ? merged.indexOf(before) + 1 : merged.length, 0, n);
+  }
+  for (const i of state.items) if (i.reparto && !merged.includes(i.reparto)) merged.push(i.reparto);
+  state.layouts[storeId] = merged;
+  state.route = {storeId};
+  if (btn) busy(btn, false);
+  save(); showTab("lista");
+}
+
+/* ---------- lista automatica dalle abitudini ---------- */
+const STOP = new Set(["confezione","conf","pezzi","grammi","litri","litro","offerta","sconto","bottiglia","vaschetta","busta","bianco","classico","classica","fresco","fresca","italiano","italiana"]);
+function habitKey(name){
+  const w = String(name).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\d+([.,]\d+)?\s*(g|gr|kg|ml|cl|l|lt|pz|x)\b/g," ").split(/[^a-z]+/).filter(x => x.length >= 3 && !STOP.has(x));
+  return w.slice(0, 2).join(" ");
+}
+function habits(){
+  const map = new Map();
+  const sorted = [...receipts].sort((a,b) => a.date.localeCompare(b.date));
+  for (const r of sorted){
+    const seen = new Set();
+    for (const a of (r.items || [])){
+      const k = habitKey(a.nome); if (!k || seen.has(k)) continue; seen.add(k);
+      const h = map.get(k) || {key:k, name:a.nome, dates:[], prices:[]};
+      h.dates.push(r.date); h.prices.push({p:Number(a.prezzo), store:r.store}); h.name = a.nome;
+      map.set(k, h);
+    }
+  }
+  const now = new Date(today());
+  const out = [];
+  for (const h of map.values()){
+    const days = [...new Set(h.dates)];
+    if (days.length < 2) continue;
+    const t = days.map(d => new Date(d).getTime());
+    let gaps = []; for (let i = 1; i < t.length; i++) gaps.push((t[i] - t[i-1]) / 864e5);
+    gaps = gaps.filter(g => g > 0); if (!gaps.length) continue;
+    gaps.sort((a,b) => a - b);
+    const every = Math.max(2, Math.round(gaps[Math.floor(gaps.length / 2)]));
+    const since = Math.round((now - t[t.length - 1]) / 864e5);
+    const due = since >= every * 0.8;
+    out.push({...h, count:days.length, every, since, due, score: since / every});
+  }
+  return out.filter(h => h.due).sort((a,b) => b.score - a.score);
+}
+function inList(h){ return state.items.some(i => !i.done && (habitKey(i.name) === h.key || words(i.name).some(w => h.key.includes(w.slice(0, Math.max(4, w.length - 1)))))); }
+function renderSuggestions(){
+  const box = $("#sugg"), intro = $("#suggIntro"), all = $("#suggAll");
+  if (receipts.length < 3){
+    intro.textContent = `Quando avrai salvato almeno 3 scontrini nello Storico, qui compariranno i prodotti che compri spesso e che probabilmente stanno finendo. Ora ne hai ${receipts.length}.`;
+    box.innerHTML = ""; all.hidden = true; return;
+  }
+  const dis = state.dismissed || {};
+  const list = habits().filter(h => !inList(h) && !(dis[h.key] && dis[h.key] >= today())).slice(0, 12);
+  all.hidden = list.length < 2;
+  if (!list.length){ intro.textContent = "Per ora non ti manca niente di quello che compri di solito."; box.innerHTML = ""; return; }
+  intro.textContent = "Prodotti che compri spesso e che, in base a quando li hai presi l'ultima volta, probabilmente stanno finendo.";
+  box.innerHTML = "";
+  const addH = h => state.items.push({id:uid(), name:h.name, qty:"", done:false, from:"abitudine"});
+  for (const h of list){
+    const d = document.createElement("div"); d.className = "sugg";
+    d.innerHTML = `<div class="info"><span>${esc(h.name)}</span><span>Lo compri circa ogni ${h.every} giorni · l'ultima volta ${h.since === 0 ? "oggi" : h.since === 1 ? "ieri" : h.since + " giorni fa"}</span></div><button type="button" class="primary">Aggiungi</button><button type="button" class="ghost" aria-label="Non ora: ${esc(h.name)}">Non ora</button>`;
+    const [add, skip] = d.querySelectorAll("button");
+    add.onclick = () => { addH(h); save(); };
+    skip.onclick = () => { const until = new Date(Date.now() + Math.max(2, Math.round(h.every / 2)) * 864e5).toISOString().slice(0,10); state.dismissed = {...dis, [h.key]: until}; save(); };
+    box.appendChild(d);
+  }
+  all.onclick = () => { list.forEach(addH); save(); };
+}
+
+function renderStores(){
+  const box = $("#chainChips"); box.innerHTML = "";
+  const names = [...new Set([...CHAINS, ...state.stores.map(s => s.name)])];
+  for (const name of names){
+    const on = state.stores.some(s => s.name === name);
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip" + (on ? " on" : ""); b.textContent = name;
+    b.setAttribute("aria-pressed", on);
+    b.onclick = () => {
+      if (on) state.stores = state.stores.filter(s => s.name !== name);
+      else state.stores.push({id:uid(), name});
+      save();
+    };
+    box.appendChild(b);
+  }
+  const sel = $("#flyerStore"); const prev = sel.value; sel.innerHTML = "";
+  if (!state.stores.length) sel.innerHTML = `<option value="">Scegli prima un supermercato</option>`;
+  for (const s of state.stores){ const o = document.createElement("option"); o.value = s.id; o.textContent = s.name; sel.appendChild(o); }
+  if (prev && state.stores.some(s => s.id === prev)) sel.value = prev;
+  updateFlyerSearch();
+}
+function updateFlyerSearch(){
+  const s = state.stores.find(x => x.id === $("#flyerStore").value);
+  const q = `volantino ${s ? s.name : "supermercati"} ${state.zona || ""}`.trim();
+  $("#flyerSearch").href = "https://www.google.com/search?q=" + encodeURIComponent(q);
+  const slug = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  const city = slug(String(state.zona || "").replace(/\d+/g," ").trim().split(/\s{2,}|,/)[0]);
+  $("#flyerOnline").href = s ? `https://www.doveconviene.it/${city || "italia"}/volantino/${slug(s.name)}` : "https://www.doveconviene.it/";
+  $("#mapsNear").href = state.zona ? "https://www.google.com/maps/search/" + encodeURIComponent("supermercati " + state.zona) : "https://www.google.com/maps/search/supermercati+vicino+a+me";
+}
+
+function renderOffers(){
+  const act = activeOffers();
+  $("#offerCount").textContent = `${act.length} attiv${act.length === 1 ? "a" : "e"}`;
+  const box = $("#offersByStore"); box.innerHTML = "";
+  for (const s of state.stores){
+    const os = act.filter(o => o.storeId === s.id);
+    if (!os.length) continue;
+    const det = document.createElement("details");
+    const ad = autoDocs.find(d => storeIdFor(d.catena) === s.id);
+    det.innerHTML = `<summary>${esc(s.name)} · ${os.length} offerte${ad && ad.aggiornato ? ` · aggiornate in automatico il ${esc(new Date(ad.aggiornato).toLocaleDateString("it-IT"))}` : ""}</summary>`;
+    const list = document.createElement("div"); list.className = "offers-list"; list.style.marginTop = "6px";
+    for (const o of os){
+      const d = document.createElement("div");
+      d.innerHTML = `<span>${esc(o.product)}${o.until ? ` <span class="muted">fino al ${esc(o.until.split("-").reverse().join("/"))}</span>` : ""}</span><span class="mono">${o.was ? `<s class="muted">${eur(o.was)}</s> ` : ""}${eur(o.price)}</span>${o.auto ? `<span class="tag ok">auto</span>` : `<button type="button" class="ghost" aria-label="Elimina offerta">✕</button>`}`;
+      if (!o.auto) d.querySelector("button").onclick = () => { state.offers = state.offers.filter(x => x !== o); save(); };
+      list.appendChild(d);
+    }
+    det.appendChild(list); box.appendChild(det);
+  }
+}
+
+function renderResults(){
+  const box = $("#results"); box.innerHTML = "";
+  const est = state.lastEstimate;
+  if (!est || !est.negozi || !est.negozi.length) {
+    if (state.stores.length) {
+      for (const s of state.stores){
+        const n = matchingOffers(s.id).length;
+        const div = document.createElement("div"); div.className = "store";
+        div.innerHTML = `<div class="store-head"><span class="store-name">${esc(s.name)}</span><span class="tag ${n ? "offer" : ""}">${n} offert${n === 1 ? "a" : "e"} sulla tua lista</span></div>`;
+        box.appendChild(div);
+      }
+    }
+    return;
+  }
+  const ranked = [...est.negozi].filter(n => state.stores.some(s => s.id === n.id)).sort((a,b) => (a.totale ?? 1e9) - (b.totale ?? 1e9));
+  const min = ranked.length ? ranked[0].totale : 0;
+  ranked.forEach((n, i) => {
+    const s = state.stores.find(x => x.id === n.id);
+    const nOff = matchingOffers(n.id).length;
+    const div = document.createElement("div"); div.className = "store" + (i === 0 ? " best" : "");
+    const diff = i === 0 ? `<span class="tag ok">Il più conveniente</span>` : `<span class="small muted">+${eur(n.totale - min)}</span>`;
+    div.innerHTML = `<div class="store-head"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="store-name">${esc(s.name)}</span><div class="row" style="gap:6px">${diff}<span class="tag ${nOff ? "offer" : ""}">${nOff} offert${nOff === 1 ? "a" : "e"}</span></div></div><span class="total">${eur(n.totale)}</span></div>
+      <details><summary>Vedi lo scontrino previsto</summary><div class="receipt">${(n.articoli || []).map(a => `<div><span>${esc(a.nome)}${a.fonte === "volantino" ? ` <span class="src-v">· volantino</span>` : ""}</span><span>${eur(a.prezzo)}</span></div>`).join("")}</div></details>
+      <div class="row"><button type="button" class="${i === 0 ? "primary" : ""} pick">Fai la spesa qui</button><a class="btn" target="_blank" rel="noopener" href="${mapsHref(s)}">Portami lì ↗</a></div>`;
+    div.querySelector(".pick").onclick = e => startRoute(s.id, e.currentTarget);
+    box.appendChild(div);
+  });
+  if (est.consiglio) { const c = document.createElement("div"); c.className = "note"; c.textContent = est.consiglio; box.appendChild(c); }
+  const when = new Date(est.at);
+  const m = document.createElement("div"); m.className = "small muted";
+  m.textContent = `Calcolato il ${when.toLocaleDateString("it-IT")} alle ${when.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}. I prezzi marcati "volantino" vengono dalle tue foto; gli altri sono stime dei prezzi medi della catena e possono variare da negozio a negozio.`;
+  box.appendChild(m);
+}
+
+function renderRecipes(){
+  const box = $("#recipes"); box.innerHTML = "";
+  if (!state.recipes.length){ box.innerHTML = `<div class="empty">Nessuna ricetta salvata. Scrivi nome e ingredienti qui sopra${sample ? ", oppure tocca “Suggerisci ingredienti”" : ""}.</div>`; return; }
+  for (const r of state.recipes){
+    const d = document.createElement("div"); d.className = "recipe";
+    d.innerHTML = `<div class="row" style="justify-content:space-between"><strong>${esc(r.name)}</strong><span class="small muted">${r.servings} porzioni</span></div>
+      <ul>${r.ingredients.map(i => `<li>${esc(i.nome)} <span class="mono muted small">${esc(i.qta || "")}</span></li>`).join("")}</ul>
+      <div class="row"><button type="button" class="primary">Aggiungi alla lista</button><button type="button" class="ghost danger">Elimina</button></div>`;
+    const [add, del] = d.querySelectorAll("button");
+    add.onclick = () => {
+      let added = 0;
+      for (const ing of r.ingredients){
+        const ex = state.items.find(i => !i.done && i.name.toLowerCase() === ing.nome.toLowerCase());
+        if (ex) continue;
+        state.items.push({id:uid(), name:ing.nome, qty:ing.qta || "", done:false, from:r.name}); added++;
+      }
+      save();
+      add.textContent = added ? `Aggiunti ${added} prodotti` : "Già tutto in lista";
+      setTimeout(() => add.textContent = "Aggiungi alla lista", 1800);
+    };
+    del.onclick = () => { state.recipes = state.recipes.filter(x => x !== r); save(); };
+    box.appendChild(d);
+  }
+}
+
+let shownCard = null;
+function renderCards(){
+  const box = $("#cards"); box.innerHTML = "";
+  if (!state.cards.length) box.innerHTML = `<div class="empty">Nessuna carta. Aggiungi qui sotto il numero stampato sotto il codice a barre della tua carta.</div>`;
+  for (const c of state.cards){
+    const b = document.createElement("button"); b.type = "button"; b.className = "cardtile";
+    b.innerHTML = `<strong>${esc(c.chain)}</strong><span class="mono">•••• ${esc(String(c.number).slice(-4))}</span>`;
+    b.onclick = () => openCard(c);
+    box.appendChild(b);
+  }
+  if (shownCard && !state.cards.includes(shownCard)) { shownCard = null; $("#cardShow").hidden = true; }
+}
+function drawBarcode(svg, number, fmt){
+  if (!window.JsBarcode) return false;
+  const opts = {format: fmt, displayValue:false, lineColor:"#000000", background:"#ffffff", height:90, margin:6, width:2.2};
+  try { JsBarcode(svg, number, opts); return true; }
+  catch(e){ try { JsBarcode(svg, number, {...opts, format:"CODE128"}); return true; } catch(e2){ return false; } }
+}
+function openCard(c){
+  shownCard = c;
+  $("#cardShow").hidden = false;
+  $("#cardShowName").textContent = c.chain;
+  $("#cardShowNum").textContent = c.number;
+  if (!drawBarcode($("#barcode"), c.number, c.format)) $("#barcode").innerHTML = "";
+  $("#cardShow").scrollIntoView({behavior:"smooth", block:"start"});
+  try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(()=>{}); } catch(e){}
+}
+$("#cardClose").onclick = () => { shownCard = null; $("#cardShow").hidden = true; };
+$("#cardDelete").onclick = () => {
+  const b = $("#cardDelete");
+  if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Tocca di nuovo per eliminare"; setTimeout(() => { b.dataset.confirm = ""; b.textContent = "Elimina questa carta"; }, 3000); return; }
+  b.dataset.confirm = ""; b.textContent = "Elimina questa carta";
+  state.cards = state.cards.filter(x => x !== shownCard); save();
+};
+
+/* ---------- azioni ---------- */
+$("#addForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("#addName").value.trim(); if (!name) return;
+  state.items.push({id:uid(), name, qty:$("#addQty").value.trim(), done:false});
+  $("#addName").value = ""; $("#addQty").value = ""; $("#addName").focus();
+  save();
+});
+$("#clearDone").onclick = () => { state.items = state.items.filter(i => !i.done); save(); };
+$("#clearAll").onclick = () => {
+  const b = $("#clearAll");
+  if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Tocca di nuovo per svuotare"; setTimeout(() => { b.dataset.confirm = ""; b.textContent = "Svuota lista"; }, 3000); return; }
+  b.dataset.confirm = ""; b.textContent = "Svuota lista";
+  state.items = []; save();
+};
+$("#goCompare").onclick = () => showTab("confronta");
+$("#zona").addEventListener("change", () => { state.zona = $("#zona").value.trim(); save(); });
+$("#flyerStore").addEventListener("change", updateFlyerSearch);
+$("#addChain").onclick = () => {
+  const n = $("#customChain").value.trim(); if (!n) return;
+  if (!state.stores.some(s => s.name.toLowerCase() === n.toLowerCase())) state.stores.push({id:uid(), name:n});
+  $("#customChain").value = ""; save();
+};
+
+function busy(btn, on, label){ btn.disabled = on; if (on){ btn.dataset.l = btn.innerHTML; btn.innerHTML = `<span class="spinner"></span> ${label}`; } else if (btn.dataset.l) btn.innerHTML = btn.dataset.l; }
+function aiError(e){
+  const c = e && e.code;
+  if (c === "not_granted") return "Serve il tuo permesso per usare Claude: riprova e accetta la richiesta.";
+  if (c === "rate_limited") return "Troppe richieste ravvicinate. Aspetta un minuto e riprova.";
+  if (c === "images_unavailable") return "In questa vista non si possono inviare foto.";
+  if (c === "no_key") return "Serve la chiave API di Claude: aprila dalle Impostazioni (icona in alto a destra).";
+  if (c === "bad_key") return "La chiave API non è valida o non ha credito. Controllala nelle Impostazioni.";
+  if (c === "offline") return "Sei offline. Riprova quando hai connessione.";
+  if (c === "refused") return "Claude non ha potuto completare questa richiesta.";
+  return "Non sono riuscito a completare la richiesta. Riprova tra poco.";
+}
+
+$("#estimate").onclick = async () => {
+  const msg = $("#estimateMsg"); const btn = $("#estimate");
+  const items = state.items.filter(i => !i.done);
+  if (!items.length){ msg.textContent = "La lista è vuota: aggiungi prima qualche prodotto."; return; }
+  if (!state.stores.length){ msg.textContent = "Scegli almeno un supermercato qui sopra."; return; }
+  if (!sample){ msg.textContent = "Il calcolo usa Claude, che non è disponibile in questa vista. Apri la pagina da claude.ai con il tuo account."; return; }
+  busy(btn, true, "Calcolo…"); msg.textContent = "Sto confrontando i prezzi, ci vogliono circa 20 secondi.";
+  const prompt = `Sei un esperto di prezzi dei supermercati in Italia. Oggi è il ${today()}.
+Zona del cliente: ${state.zona || "Italia (zona non indicata)"}.
+Lista della spesa (nome e quantità): ${JSON.stringify(items.map(i => ({nome:i.name, qta:i.qty || "1 confezione standard"})))}
+Supermercati da confrontare: ${JSON.stringify(state.stores.map(s => ({id:s.id, catena:s.name})))}
+Offerte certe lette dai volantini del cliente (prezzi reali, validi oggi): ${JSON.stringify(activeOffers().map(o => ({storeId:o.storeId, prodotto:o.product, prezzo:o.price})))}
+Prezzi pagati di recente dal cliente (dagli scontrini, utili per stimare meglio): ${JSON.stringify(paidPricesFor(items))}
+Per ogni supermercato indica il prezzo di ogni articolo per la quantità richiesta. Se un'offerta certa di quel supermercato corrisponde all'articolo, usa quel prezzo e metti fonte "volantino". Altrimenti, se il cliente ha pagato di recente quell'articolo in quella catena, parti da quel prezzo; se no stima il prezzo tipico attuale di quella catena (marca del distributore o prodotto più comune) e metti fonte "stima". Il totale è la somma dei prezzi. Aggiungi un consiglio breve e pratico in italiano (massimo 2 frasi), per esempio se conviene dividere la spesa tra due negozi.
+Rispondi SOLO con JSON: {"negozi":[{"id":"...","articoli":[{"nome":"...","prezzo":0.00,"fonte":"stima"}],"totale":0.00}],"consiglio":"..."}`;
+  try {
+    const r = await sample.json(prompt, {modelTier:"default", cache:false});
+    if (!r || !Array.isArray(r.negozi)) throw {code:"invalid_json"};
+    r.negozi.forEach(n => { n.articoli = (n.articoli || []).map(a => ({...a, prezzo:Number(a.prezzo)})); n.totale = n.articoli.reduce((s,a) => s + (isFinite(a.prezzo) ? a.prezzo : 0), 0); });
+    r.at = Date.now();
+    state.lastEstimate = r; msg.textContent = "";
+    save();
+  } catch(e){ msg.innerHTML = `<span class="err">${esc(aiError(e))}</span>`; }
+  busy(btn, false);
+};
+
+/* volantino: PDF o più immagini, una pagina alla volta */
+let pdfWorkerReady = null;
+function ensurePdf(){
+  if (!window.pdfjsLib) return Promise.reject(new Error("pdf"));
+  if (!pdfWorkerReady) pdfWorkerReady = new Promise((res, rej) => {
+    if (window.pdfjsWorker) return res();
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    sc.onload = () => res(); sc.onerror = () => { pdfWorkerReady = null; rej(new Error("pdf")); };
+    document.head.appendChild(sc);
+  }).then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; });
+  return pdfWorkerReady;
+}
+async function pdfPages(file, maxPages){
+  await ensurePdf();
+  const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  const out = [];
+  for (let i = 1; i <= Math.min(doc.numPages, maxPages); i++){
+    const page = await doc.getPage(i);
+    const v1 = page.getViewport({scale:1});
+    const vp = page.getViewport({scale: Math.min(3, 1800 / Math.max(v1.width, v1.height))});
+    const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({canvasContext:ctx, viewport:vp}).promise;
+    out.push(await new Promise(r => c.toBlob(r, "image/jpeg", 0.85)));
+  }
+  return {pages:out, total:doc.numPages};
+}
+let flyerAbort = null;
+const NO_AI = "Un attimo, l'app si sta avviando.";
+function guardAi(labelSel, msgSel){
+  $(labelSel).addEventListener("click", e => {
+    if (sample) return;
+    e.preventDefault();
+    $(msgSel).innerHTML = `<span class="err">${esc(sampleTried ? NO_AI : "Un attimo, sto ancora avviando l'app. Riprova tra qualche secondo.")}</span>`;
+  });
+}
+guardAi("#flyerBtn", "#flyerMsg"); guardAi("#rcBtn", "#rcMsg");
+$("#flyerStop").onclick = () => flyerAbort && flyerAbort.abort();
+$("#flyerFile").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  const msg = $("#flyerMsg"); const storeId = $("#flyerStore").value;
+  if (!files.length) return;
+  if (!storeId){ msg.innerHTML = `<span class="err">Scegli prima il supermercato del volantino.</span>`; return; }
+  if (!sample) return;
+  const store = state.stores.find(s => s.id === storeId);
+  const MAX = 16;
+  const prog = $("#flyerProg"), progTxt = $("#flyerProgTxt");
+  msg.textContent = ""; prog.hidden = false; progTxt.textContent = "Preparo le pagine…";
+  $("#flyerBtn").setAttribute("aria-disabled", "true"); $("#flyerFile").disabled = true;
+  flyerAbort = new AbortController();
+  let pages = [], skipped = 0;
+  try {
+    for (const f of files){
+      if (pages.length >= MAX) { skipped++; continue; }
+      if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+        progTxt.textContent = `Apro il PDF ${f.name}…`;
+        const r = await pdfPages(f, MAX - pages.length);
+        pages.push(...r.pages); skipped += Math.max(0, r.total - r.pages.length);
+      } else pages.push(await shrink(f, 2000));
+    }
+  } catch(err){
+    prog.hidden = true; $("#flyerFile").disabled = false; $("#flyerBtn").removeAttribute("aria-disabled");
+    msg.innerHTML = `<span class="err">Non riesco ad aprire il file. Se è un PDF protetto, fai degli screenshot delle pagine e carica quelli.</span>`; return;
+  }
+  const found = new Map(); let until = null, failed = 0, stopped = false;
+  for (let i = 0; i < pages.length; i++){
+    if (flyerAbort.signal.aborted) { stopped = true; break; }
+    progTxt.textContent = `Leggo la pagina ${i + 1} di ${pages.length} · ${found.size} offerte trovate`;
+    try {
+      const r = await sample.json(`L'immagine è la pagina ${i + 1} del volantino delle offerte del supermercato ${store.name}. Oggi è il ${today()}. Estrai tutte le offerte di prodotti leggibili (alimentari, casa, igiene). Per ogni offerta: nome del prodotto con marca e formato, prezzo in offerta in euro come numero, prezzo prima dello sconto se indicato. Se la pagina indica fino a quando valgono le offerte, riportalo come data AAAA-MM-GG, altrimenti null. Se la pagina non contiene offerte rispondi con un elenco vuoto.
+Rispondi SOLO con JSON: {"validoFino":"AAAA-MM-GG" oppure null,"offerte":[{"prodotto":"...","prezzo":0.00,"prezzoPrima":null}]}`, {images:pages[i], modelTier:"default", signal:flyerAbort.signal});
+      if (r && r.validoFino && /^\d{4}-\d{2}-\d{2}$/.test(r.validoFino) && !until) until = r.validoFino;
+      for (const o of (r && Array.isArray(r.offerte) ? r.offerte : [])){
+        const price = Number(o.prezzo); if (!o.prodotto || !isFinite(price) || price <= 0) continue;
+        const was = Number(o.prezzoPrima);
+        found.set(String(o.prodotto).toLowerCase().trim() + "|" + price.toFixed(2), {product:String(o.prodotto).trim(), price, was:isFinite(was) && was > price ? was : null});
+      }
+    } catch(err){
+      if (err && err.code === "cancelled") { stopped = true; break; }
+      if (err && (err.code === "not_granted" || err.code === "rate_limited")) { msg.innerHTML = `<span class="err">${esc(aiError(err))}</span>`; stopped = true; break; }
+      failed++;
+    }
+  }
+  prog.hidden = true; $("#flyerFile").disabled = false; $("#flyerBtn").removeAttribute("aria-disabled"); flyerAbort = null;
+  if (!found.size){ if (!msg.textContent) msg.innerHTML = `<span class="err">Non ho trovato offerte leggibili. Prova con screenshot più nitidi o con il PDF del volantino.</span>`; return; }
+  state.offers = state.offers.filter(o => o.storeId !== storeId);
+  for (const o of found.values()) state.offers.push({id:uid(), storeId, product:o.product, price:o.price, was:o.was, until, added:today()});
+  const notes = [];
+  if (stopped) notes.push("lettura interrotta");
+  if (failed) notes.push(`${failed} pagin${failed === 1 ? "a" : "e"} non lett${failed === 1 ? "a" : "e"}`);
+  if (skipped) notes.push(`${skipped} pagin${skipped === 1 ? "a" : "e"} oltre il limite di ${MAX}`);
+  msg.innerHTML = `<span class="tag ok">Caricate ${found.size} offerte di ${esc(store.name)}${until ? ` valide fino al ${until.split("-").reverse().join("/")}` : ""}</span>${notes.length ? ` <span class="muted">(${esc(notes.join(", "))})</span>` : ""}`;
+  save();
+});
+
+function parseIngredients(txt){
+  return txt.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.split(/\s+[-–:]\s+/);
+    return {nome:m[0].trim(), qta:(m[1] || "").trim()};
+  });
+}
+$("#recSave").onclick = () => {
+  const name = $("#recName").value.trim(); const ingr = parseIngredients($("#recIngr").value);
+  if (!name || !ingr.length){ $("#recMsg").innerHTML = `<span class="err">Scrivi il nome e almeno un ingrediente.</span>`; return; }
+  state.recipes.unshift({id:uid(), name, servings:Number($("#recServ").value) || 4, ingredients:ingr});
+  $("#recName").value = ""; $("#recIngr").value = ""; $("#recMsg").textContent = "Ricetta salvata.";
+  save();
+};
+$("#recAi").onclick = async () => {
+  const name = $("#recName").value.trim(); const btn = $("#recAi");
+  if (!sample){ $("#recMsg").innerHTML = `<span class="err">${esc(NO_AI.replace("La lettura delle foto usa", "Questa funzione usa"))}</span>`; return; }
+  if (!name){ $("#recMsg").innerHTML = `<span class="err">Scrivi prima il nome del piatto.</span>`; return; }
+  busy(btn, true, "Penso…");
+  try {
+    const r = await sample.json(`Ricetta italiana casalinga: "${name}" per ${Number($("#recServ").value) || 4} persone. Elenca gli ingredienti da comprare al supermercato con le quantità (es. "500 g", "2", "1 l"). Escludi sale, pepe e acqua.
+Rispondi SOLO con JSON: {"ingredienti":[{"nome":"...","qta":"..."}]}`, {modelTier:"quick"});
+    const list = (r && r.ingredienti) || [];
+    $("#recIngr").value = list.map(i => `${i.nome} - ${i.qta || ""}`.trim()).join("\n");
+    $("#recMsg").textContent = "Controlla gli ingredienti, correggi se serve e salva.";
+  } catch(e){ $("#recMsg").innerHTML = `<span class="err">${esc(aiError(e))}</span>`; }
+  busy(btn, false);
+};
+
+$("#cardForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const chain = $("#cardChain").value.trim(); const number = $("#cardNum").value.replace(/\s+/g,"");
+  if (!chain || !number){ $("#cardMsg").innerHTML = `<span class="err">Scrivi il supermercato e il numero della carta.</span>`; return; }
+  const c = {id:uid(), chain, number, format:$("#cardFmt").value};
+  state.cards.push(c); $("#cardChain").value = ""; $("#cardNum").value = ""; $("#cardMsg").textContent = "";
+  save(); openCard(c);
+});
+/* foto: rimpicciolisce l'immagine prima di mandarla a Claude */
+function shrink(file, max = 1600){
+  return new Promise(res => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(b => res(b || file), "image/jpeg", 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); res(file); };
+    img.src = url;
+  });
+}
+function fmtFrom(name){ name = String(name || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); return name === "EAN13" ? "EAN13" : name === "EAN8" ? "EAN8" : "CODE128"; }
+async function readBarcodeLocal(file){
+  const url = URL.createObjectURL(file);
+  try {
+    if ("BarcodeDetector" in window) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const found = await new BarcodeDetector().detect(bmp);
+        if (found && found[0] && found[0].rawValue) return {numero:found[0].rawValue, formato:fmtFrom(found[0].format)};
+      } catch(e){}
+    }
+    if (window.ZXing && ZXing.BrowserMultiFormatReader) {
+      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      const reader = new ZXing.BrowserMultiFormatReader(hints);
+      const r = await reader.decodeFromImageUrl(url);
+      if (r && r.getText()) return {numero:r.getText(), formato:fmtFrom(ZXing.BarcodeFormat[r.getBarcodeFormat()])};
+    }
+  } catch(e){} finally { URL.revokeObjectURL(url); }
+  return null;
+}
+$("#cardPhoto").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const msg = $("#cardMsg");
+  msg.innerHTML = `<span class="row" style="gap:6px"><span class="spinner"></span> Leggo il codice a barre…</span>`;
+  const local = await readBarcodeLocal(f);
+  if (local) {
+    $("#cardNum").value = local.numero; $("#cardFmt").value = local.formato;
+    msg.textContent = $("#cardChain").value ? "Codice letto. Controlla e salva." : "Codice letto. Scrivi il nome del supermercato e salva.";
+    $("#cardChain").value || $("#cardChain").focus();
+    return;
+  }
+  if (!sample) { msg.innerHTML = `<span class="err">Non riesco a leggere il codice dalla foto. Avvicinati al codice a barre, con buona luce e senza riflessi, oppure scrivi il numero a mano.</span>`; return; }
+  msg.innerHTML = `<span class="row" style="gap:6px"><span class="spinner"></span> Il codice non si legge bene, chiedo a Claude di leggere il numero…</span>`;
+  try {
+    const img = await shrink(f);
+    const r = await sample.json(`La foto mostra una carta fedeltà di un supermercato. Leggi il nome del supermercato e il numero stampato sotto il codice a barre (solo cifre o caratteri, senza spazi). Indica il formato: "EAN13" se sono 13 cifre, "EAN8" se 8 cifre, altrimenti "CODE128".
+Rispondi SOLO con JSON: {"catena":"...","numero":"...","formato":"EAN13"}`, {images:img, modelTier:"default"});
+    if (r && r.numero){ if (r.catena && !$("#cardChain").value) $("#cardChain").value = r.catena; $("#cardNum").value = String(r.numero).replace(/\s+/g,""); $("#cardFmt").value = fmtFrom(r.formato); msg.textContent = "Controlla che il numero sia giusto e salva."; }
+    else msg.innerHTML = `<span class="err">Non riesco a leggere il numero. Scrivilo a mano.</span>`;
+  } catch(err){ msg.innerHTML = `<span class="err">${esc(aiError(err))} Puoi anche scrivere il numero a mano.</span>`; }
+});
+
+/* ---------- storico scontrini ---------- */
+const MESI = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+const ym = d => String(d || "").slice(0,7);
+function paidPricesFor(items){
+  const out = [];
+  const recent = [...receipts].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 30);
+  for (const it of items){
+    const iw = words(it.name); if (!iw.length) continue;
+    for (const r of recent){
+      const hit = (r.items || []).find(a => { const aw = words(a.nome).join(" "); return iw.some(w => aw.includes(w.slice(0, Math.max(4, w.length-1)))); });
+      if (hit) { out.push({articolo:it.name, pagato:hit.nome, prezzo:hit.prezzo, negozio:r.store, data:r.date}); break; }
+    }
+  }
+  return out.slice(0, 40);
+}
+function renderHistory(){
+  const now = new Date(); const curYm = now.toISOString().slice(0,7);
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().slice(0,7);
+  const sumM = m => receipts.filter(r => ym(r.date) === m).reduce((s,r) => s + (Number(r.total) || 0), 0);
+  const cur = sumM(curYm), last = sumM(prev);
+  const yearR = receipts.filter(r => String(r.date).slice(0,4) === String(now.getFullYear()));
+  const avg = receipts.length ? receipts.reduce((s,r) => s + (Number(r.total) || 0), 0) / receipts.length : 0;
+  const delta = last ? Math.round((cur - last) / last * 100) : null;
+  $("#kpis").innerHTML = `
+    <div class="kpi"><span class="lbl">Questo mese</span><span class="v">${eur(cur)}</span><span class="d">${delta === null ? "&nbsp;" : (delta > 0 ? "+" : "") + delta + "% sul mese scorso"}</span></div>
+    <div class="kpi"><span class="lbl">Mese scorso</span><span class="v">${eur(last)}</span><span class="d">&nbsp;</span></div>
+    <div class="kpi"><span class="lbl">Spesa media</span><span class="v">${eur(avg)}</span><span class="d">${receipts.length} scontrin${receipts.length === 1 ? "o" : "i"}</span></div>`;
+  // grafico 12 mesi
+  const months = [];
+  for (let i = 11; i >= 0; i--){ const d = new Date(now.getFullYear(), now.getMonth() - i, 15); months.push({k:d.toISOString().slice(0,7), m:d.getMonth(), y:d.getFullYear()}); }
+  months.forEach(m => m.v = sumM(m.k));
+  const max = Math.max(...months.map(m => m.v), 0);
+  const W = 360, H = 170, top = 22, bottom = 22, left = 4, right = 4;
+  const plotH = H - top - bottom, colW = (W - left - right) / 12, bw = Math.min(18, colW - 8);
+  const nice = max <= 0 ? 100 : Math.pow(10, Math.floor(Math.log10(max))) * ([1,2,2.5,5,10].find(f => f * Math.pow(10, Math.floor(Math.log10(max))) >= max) || 10);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Spesa per mese negli ultimi 12 mesi">`;
+  svg += `<line x1="${left}" x2="${W-right}" y1="${top}" y2="${top}" stroke-dasharray="2 3"/><text x="${W-right}" y="${top-6}" text-anchor="end">${eur(nice).replace(",00","")}</text>`;
+  svg += `<line x1="${left}" x2="${W-right}" y1="${H-bottom}" y2="${H-bottom}"/>`;
+  months.forEach((m, i) => {
+    const cx = left + colW * i + colW / 2;
+    const h = nice ? (m.v / nice) * plotH : 0;
+    const y = H - bottom - h;
+    if (h > 0) {
+      const r = Math.min(4, h, bw / 2);
+      svg += `<path class="bar${m.k === curYm ? "" : " dim"}" d="M${cx-bw/2},${H-bottom} V${y+r} Q${cx-bw/2},${y} ${cx-bw/2+r},${y} H${cx+bw/2-r} Q${cx+bw/2},${y} ${cx+bw/2},${y+r} V${H-bottom} Z"/>`;
+    }
+    if (m.k === curYm && m.v > 0) svg += `<text class="val" x="${cx}" y="${Math.max(top + 10, y - 5)}" text-anchor="${i === 11 ? "end" : "middle"}">${eur(m.v).replace(/,\d\d/,"")}</text>`;
+    svg += `<text x="${cx}" y="${H-6}" text-anchor="middle">${MESI[m.m]}</text>`;
+    svg += `<rect class="hit" data-i="${i}" x="${left + colW*i}" y="${top}" width="${colW}" height="${plotH + bottom}"><title>${MESI[m.m]} ${m.y}: ${eur(m.v)}</title></rect>`;
+  });
+  svg += `</svg>`;
+  $("#chart").innerHTML = svg;
+  const cap = $("#chartCap");
+  const showCap = i => { const m = months[i]; const n = receipts.filter(r => ym(r.date) === m.k).length; cap.innerHTML = `<strong>${MESI[m.m]} ${m.y}</strong> · <span class="mono">${eur(m.v)}</span> <span class="muted">· ${n} spes${n === 1 ? "a" : "e"}</span>`; };
+  $("#chart").querySelectorAll(".hit").forEach(el => { el.addEventListener("mouseenter", () => showCap(+el.dataset.i)); el.addEventListener("click", () => showCap(+el.dataset.i)); });
+  if (!receipts.length) cap.innerHTML = `<span class="muted">Il grafico si riempie quando salvi il primo scontrino.</span>`; else showCap(11);
+  // per negozio
+  const byStore = {};
+  yearR.forEach(r => { const k = r.store || "Altro"; byStore[k] = (byStore[k] || 0) + (Number(r.total) || 0); });
+  const st = Object.entries(byStore).sort((a,b) => b[1] - a[1]);
+  $("#histStores").hidden = !st.length; $("#storesYear").textContent = "· " + now.getFullYear();
+  const smax = st.length ? st[0][1] : 1;
+  $("#storeBars").innerHTML = st.map(([k,v]) => `<div class="storebar"><span style="overflow-wrap:anywhere">${esc(k)}</span><div class="track"><div class="fill" style="width:${Math.max(2, v / smax * 100)}%"></div></div><span class="mono">${eur(v)}</span></div>`).join("");
+  $("#histPrices").hidden = !receipts.some(r => (r.items || []).length);
+  renderPriceSearch();
+  // elenco
+  const list = $("#rcList");
+  const sorted = [...receipts].sort((a,b) => b.date.localeCompare(a.date));
+  if (!sorted.length){ list.innerHTML = `<div class="empty">Ancora nessuno scontrino. Fotografa il primo dopo la prossima spesa.</div>`; return; }
+  list.innerHTML = "";
+  for (const r of sorted){
+    const d = document.createElement("details"); d.className = "rc";
+    d.innerHTML = `<summary><span><strong>${esc(r.store)}</strong> <span class="muted small">${esc(r.date.split("-").reverse().join("/"))}</span></span><span class="mono">${eur(Number(r.total))}</span></summary>
+      <div class="receipt" style="margin-top:8px">${(r.items || []).map(a => `<div><span>${esc(a.nome)}</span><span>${eur(Number(a.prezzo))}</span></div>`).join("") || `<div class="muted">Nessun articolo registrato</div>`}</div>
+      <div class="row" style="margin-top:8px"><button type="button" class="ghost danger">Elimina scontrino</button></div>`;
+    const del = d.querySelector("button");
+    del.onclick = () => {
+      if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = "Tocca di nuovo per eliminare"; setTimeout(() => { del.dataset.confirm = ""; del.textContent = "Elimina scontrino"; }, 3000); return; }
+      receipts = receipts.filter(x => x.id !== r.id); saveReceiptsLocal();
+      if (rcCol) rcCol.doc(r.id).delete().catch(()=>{});
+      render();
+    };
+    list.appendChild(d);
+  }
+}
+function renderPriceSearch(){
+  const q = words($("#priceQ").value); const box = $("#priceRes");
+  if (!q.length){ box.innerHTML = `<div class="muted" style="font-family:var(--f-body)">Scrivi un prodotto per vedere quanto l'hai pagato e dove.</div>`; return; }
+  const rows = [];
+  for (const r of receipts) for (const a of (r.items || [])) { const aw = words(a.nome).join(" "); if (q.every(w => aw.includes(w.slice(0, Math.max(4, w.length-1))))) rows.push({...a, store:r.store, date:r.date}); }
+  rows.sort((a,b) => b.date.localeCompare(a.date));
+  if (!rows.length){ box.innerHTML = `<div class="muted" style="font-family:var(--f-body)">Nessun acquisto trovato.</div>`; return; }
+  const minP = Math.min(...rows.map(r => Number(r.prezzo)));
+  box.innerHTML = rows.slice(0, 30).map(r => `<div><span>${esc(r.date.split("-").reverse().join("/"))} · ${esc(r.store)} · ${esc(r.nome)}</span><span${Number(r.prezzo) === minP ? ' class="src-v"' : ""}>${eur(Number(r.prezzo))}</span></div>`).join("") + `<div class="muted" style="font-family:var(--f-body);margin-top:4px">In verde il prezzo più basso pagato.</div>`;
+}
+$("#priceQ").addEventListener("input", renderPriceSearch);
+
+let rcDraft = null;
+function openRcForm(d){
+  rcDraft = d;
+  $("#rcForm").hidden = false;
+  $("#rcStore").value = d.store || ""; $("#rcDate").value = d.date || today(); $("#rcTotal").value = d.total ? String(d.total.toFixed(2)).replace(".", ",") : "";
+  $("#rcItemsPrev").innerHTML = (d.items || []).length ? d.items.map(a => `<div><span>${esc(a.nome)}</span><span>${eur(a.prezzo)}</span></div>`).join("") + `<div class="muted">${d.items.length} articoli letti</div>` : "";
+  $("#rcItemsPrev").hidden = !(d.items || []).length;
+  $("#rcStore").focus();
+}
+$("#rcManual").onclick = () => { $("#rcMsg").textContent = ""; openRcForm({store:"", date:today(), total:0, items:[]}); };
+$("#rcCancel").onclick = () => { rcDraft = null; $("#rcForm").hidden = true; };
+$("#rcForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const total = Number(String($("#rcTotal").value).replace(/\s/g,"").replace(",", "."));
+  const store = $("#rcStore").value.trim(); const date = $("#rcDate").value;
+  if (!store || !date || !isFinite(total) || total <= 0){ $("#rcMsg").innerHTML = `<span class="err">Servono supermercato, data e totale.</span>`; return; }
+  const r = {id:uid(), store, date, total:Math.round(total * 100) / 100, items:(rcDraft && rcDraft.items) || [], added:Date.now()};
+  receipts.push(r); saveReceiptsLocal();
+  if (rcCol) rcCol.doc(r.id).set(r).catch(() => { $("#rcMsg").innerHTML = `<span class="err">Salvato solo su questo telefono.</span>`; });
+  rcDraft = null; $("#rcForm").hidden = true;
+  $("#rcMsg").innerHTML = `<span class="tag ok">Scontrino di ${esc(store)} salvato: ${eur(r.total)}</span>`;
+  render();
+});
+$("#rcFile").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length || !sample) return;
+  const msg = $("#rcMsg");
+  msg.innerHTML = `<span class="row" style="gap:6px"><span class="spinner"></span> Leggo lo scontrino…</span>`;
+  try {
+    let maxN = 4; try { const lim = await sample.limits(); if (lim && lim.images) maxN = Math.max(1, Math.min(lim.images.maxCount || 4, 6)); } catch(e){}
+    const imgs = await Promise.all(files.slice(0, maxN).map(f => shrink(f, 2000)));
+    const r = await sample.json(`${imgs.length > 1 ? `Le ${imgs.length} immagini sono parti dello stesso scontrino, in ordine dall'alto in basso.` : "L'immagine è uno scontrino"} di un supermercato italiano. Leggi: nome del supermercato (catena, es. "Esselunga"), data dell'acquisto (AAAA-MM-GG), totale pagato in euro, e ogni articolo con il prezzo pagato (già scontato se c'è uno sconto subito sotto). Non contare due volte le righe ripetute tra un'immagine e l'altra. Scrivi i nomi degli articoli in modo leggibile, sciogliendo le abbreviazioni quando sei sicuro.
+Rispondi SOLO con JSON: {"negozio":"...","data":"AAAA-MM-GG","totale":0.00,"articoli":[{"nome":"...","prezzo":0.00}]}`, {images:imgs, modelTier:"default"});
+    if (!r) throw {code:"invalid_json"};
+    const items = (Array.isArray(r.articoli) ? r.articoli : []).map(a => ({nome:String(a.nome || "").trim(), prezzo:Number(a.prezzo)})).filter(a => a.nome && isFinite(a.prezzo));
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(r.data || "") ? r.data : today();
+    let total = Number(r.totale); if (!isFinite(total) || total <= 0) total = items.reduce((s,a) => s + a.prezzo, 0);
+    msg.textContent = files.length > maxN ? `Ho letto le prime ${maxN} foto.` : "";
+    openRcForm({store:r.negozio || "", date, total, items});
+  } catch(err){ msg.innerHTML = `<span class="err">${esc(aiError(err))} Puoi anche inserire lo scontrino a mano.</span>`; }
+});
+
+/* ---------- solo app installabile: impostazioni, GPS, volantini online, backup ---------- */
+const APP_VERSION = "1.0.0";
+const SET_TAB = "impostazioni";
+
+function hasKey(){ return !!(window.claudeSettings && window.claudeSettings.apiKey); }
+function renderKeyBanner(){ $("#keyBanner").hidden = hasKey() || currentTab === SET_TAB; }
+
+/* impostazioni */
+(function initSettings(){
+  const sel = $("#aiModel");
+  (window.claudeModels || []).forEach(m => { const o = document.createElement("option"); o.value = m.id; o.textContent = m.label; sel.appendChild(o); });
+  if (window.claudeSettings) { $("#apiKey").value = claudeSettings.apiKey; sel.value = claudeSettings.model; }
+  $("#appVersion").textContent = "Spesa Furba " + APP_VERSION;
+  const open = () => { showTab(SET_TAB); renderKeyBanner(); };
+  $("#openSettings").onclick = open; $("#keyBannerBtn").onclick = open;
+  $("#closeSettings").onclick = () => { showTab("lista"); renderKeyBanner(); };
+  $("#apiKeyShow").onclick = () => { const i = $("#apiKey"); i.type = i.type === "password" ? "text" : "password"; $("#apiKeyShow").textContent = i.type === "password" ? "Mostra" : "Nascondi"; };
+  sel.onchange = () => { claudeSettings.model = sel.value; };
+  $("#apiSave").onclick = async () => {
+    const btn = $("#apiSave"), msg = $("#apiMsg");
+    claudeSettings.apiKey = $("#apiKey").value; claudeSettings.model = sel.value;
+    if (!claudeSettings.apiKey){ msg.innerHTML = `<span class="err">Incolla la chiave API, inizia con sk-ant-.</span>`; renderKeyBanner(); return; }
+    busy(btn, true, "Provo…");
+    try { await sample.test(); msg.innerHTML = `<span class="tag ok">Chiave funzionante</span>`; }
+    catch(e){ msg.innerHTML = `<span class="err">${esc(aiError(e))}</span>`; }
+    busy(btn, false); renderKeyBanner();
+  };
+  $("#autoFlyers").onchange = e => { state.autoFlyers = e.target.checked; save(); };
+})();
+
+/* backup */
+$("#backupSave").onclick = () => {
+  const data = JSON.stringify({app:"spesa-furba", version:1, savedAt:new Date().toISOString(), state, receipts}, null, 1);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], {type:"application/json"}));
+  a.download = `spesa-furba-${today()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  $("#backupMsg").innerHTML = `<span class="tag ok">Copia salvata nei Download</span>`;
+};
+$("#backupFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    const st = d.state || d;
+    if (!st || !Array.isArray(st.items)) throw new Error("formato");
+    state = normalize(st); state.updatedAt = Date.now();
+    if (Array.isArray(d.receipts)) { receipts = d.receipts; saveReceiptsLocal(); }
+    save();
+    $("#backupMsg").innerHTML = `<span class="tag ok">Dati ripristinati</span>`;
+  } catch(err){ $("#backupMsg").innerHTML = `<span class="err">Il file non è una copia di Spesa Furba.</span>`; }
+});
+
+/* GPS e supermercati vicini (OpenStreetMap) */
+function chainFor(brand){
+  const b = String(brand || "").toLowerCase();
+  const hit = CHAINS.find(c => new RegExp("(^|[^a-z])" + c.toLowerCase() + "([^a-z]|$)").test(b));
+  return hit || String(brand || "").trim();
+}
+function distKm(a, b){
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lon - a.lon) * Math.PI / 180;
+  const x = Math.sin(dLat/2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon/2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function mapsHref(s){
+  if (s && s.lat != null) return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
+  return "https://www.google.com/maps/search/" + encodeURIComponent((s ? s.name : "supermercati") + " " + (state.zona || "vicino a me"));
+}
+function renderNearby(){
+  const box = $("#nearby"); box.innerHTML = "";
+  for (const n of (state.nearby || []).slice(0, 15)){
+    const chain = chainFor(n.brand || n.name);
+    const on = state.stores.some(s => s.name.toLowerCase() === chain.toLowerCase());
+    const d = document.createElement("div"); d.className = "sugg";
+    d.innerHTML = `<div class="info"><span>${esc(n.name)}</span><span>${n.km.toFixed(1).replace(".", ",")} km${n.addr ? " · " + esc(n.addr) : ""}</span></div><a class="btn" target="_blank" rel="noopener" href="${mapsHref(n)}">Vai ↗</a><button type="button" class="${on ? "" : "primary"}">${on ? "Scelto" : "Scegli"}</button>`;
+    d.querySelector("button").onclick = () => {
+      if (on) return;
+      state.stores.push({id:uid(), name:chain, lat:n.lat, lon:n.lon, addr:n.addr || ""});
+      save();
+    };
+    box.appendChild(d);
+  }
+}
+$("#gpsBtn").onclick = () => {
+  const msg = $("#gpsMsg"), btn = $("#gpsBtn");
+  if (!navigator.geolocation){ msg.innerHTML = `<span class="err">Questo telefono non dà la posizione al browser.</span>`; return; }
+  busy(btn, true, "Cerco…"); msg.textContent = "";
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const p = {lat:pos.coords.latitude, lon:pos.coords.longitude};
+    state.pos = {...p, at:Date.now()};
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=it&lat=${p.lat}&lon=${p.lon}`);
+      const j = await r.json(); const a = j.address || {};
+      const city = a.city || a.town || a.village || a.municipality || "";
+      if (city) state.zona = [city, a.postcode].filter(Boolean).join(" ");
+    } catch(e){}
+    try {
+      const q = `[out:json][timeout:20];nwr["shop"="supermarket"](around:4000,${p.lat},${p.lon});out center tags 60;`;
+      const r = await fetch("https://overpass-api.de/api/interpreter", {method:"POST", body:"data=" + encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      const j = await r.json();
+      state.nearby = (j.elements || []).map(e => {
+        const t = e.tags || {}; const lat = e.lat ?? (e.center && e.center.lat), lon = e.lon ?? (e.center && e.center.lon);
+        if (lat == null) return null;
+        const addr = [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(" ");
+        return {name:t.name || t.brand || "Supermercato", brand:t.brand || t.name || "", lat, lon, addr, km:distKm(p, {lat, lon})};
+      }).filter(Boolean).sort((a,b) => a.km - b.km).slice(0, 25);
+      msg.innerHTML = state.nearby.length ? `<span class="tag ok">${state.nearby.length} supermercati entro 4 km${state.zona ? " · " + esc(state.zona) : ""}</span>` : `<span class="muted">Nessun supermercato trovato entro 4 km.</span>`;
+    } catch(e){ msg.innerHTML = `<span class="err">Non riesco a cercare i supermercati vicini. Controlla la connessione e riprova.</span>`; }
+    busy(btn, false); save();
+  }, err => {
+    busy(btn, false);
+    msg.innerHTML = `<span class="err">${err.code === 1 ? "Hai negato la posizione. Abilitala per Spesa Furba nelle impostazioni del telefono." : "Non riesco a leggere la posizione. Riprova all'aperto o con il GPS acceso."}</span>`;
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:300000});
+};
+
+/* volantini online: Claude cerca e legge le pagine dei volantini */
+async function fetchFlyerOnline(store, signal){
+  const zona = state.zona || "Italia";
+  const r = await sample.json(`Oggi è il ${today()}. Trova il volantino delle offerte in corso oggi del supermercato ${store.name} valido per la zona ${zona}${store.addr ? " (punto vendita in " + store.addr + ")" : ""}.
+Usa la ricerca web e leggi le pagine: il sito ufficiale della catena, e siti di volantini come DoveConviene, PromoQui, VolantinoFacile, Tiendeo. Preferisci il volantino della regione o della città indicata.
+Estrai le offerte di prodotti con il prezzo in offerta e, se c'è, il prezzo prima dello sconto. Riporta solo offerte che hai letto davvero nelle pagine: non inventare prodotti né prezzi. Se non trovi un volantino in corso, rispondi con trovato false.
+Rispondi SOLO con JSON: {"trovato":true,"validoDal":"AAAA-MM-GG" oppure null,"validoFino":"AAAA-MM-GG" oppure null,"fonte":"url della pagina principale","offerte":[{"prodotto":"nome con marca e formato","prezzo":0.00,"prezzoPrima":null}]}`,
+    {web:true, city:String(zona).replace(/\d+/g, "").trim() || undefined, modelTier:"default", signal});
+  const list = (r && r.trovato !== false && Array.isArray(r.offerte)) ? r.offerte.filter(o => o.prodotto && isFinite(Number(o.prezzo)) && Number(o.prezzo) > 0) : [];
+  const until = r && /^\d{4}-\d{2}-\d{2}$/.test(r.validoFino || "") ? r.validoFino : null;
+  state.flyerMeta = state.flyerMeta || {};
+  state.flyerMeta[store.id] = {at:Date.now(), until, fonte:(r && r.fonte) || "", n:list.length};
+  if (list.length){
+    state.offers = state.offers.filter(o => o.storeId !== store.id);
+    for (const o of list){ const was = Number(o.prezzoPrima); state.offers.push({id:uid(), storeId:store.id, product:String(o.prodotto).trim(), price:Number(o.prezzo), was:isFinite(was) && was > Number(o.prezzo) ? was : null, until, added:today(), online:true}); }
+  }
+  save();
+  return {n:list.length, until};
+}
+async function runOnline(stores, opts = {}){
+  const msg = $("#flyerMsg"), prog = $("#flyerProg"), progTxt = $("#flyerProgTxt");
+  if (!hasKey()){ if (!opts.silent) msg.innerHTML = `<span class="err">${esc(aiError({code:"no_key"}))}</span>`; return; }
+  if (!stores.length){ if (!opts.silent) msg.innerHTML = `<span class="err">Scegli prima almeno un supermercato.</span>`; return; }
+  flyerAbort = new AbortController();
+  prog.hidden = false; msg.textContent = "";
+  const done = [];
+  for (let i = 0; i < stores.length; i++){
+    if (flyerAbort.signal.aborted) break;
+    const s = stores[i];
+    progTxt.textContent = `Cerco il volantino di ${s.name}${stores.length > 1 ? ` (${i + 1} di ${stores.length})` : ""}… può volerci un minuto`;
+    if (opts.silent) setSync(`Aggiorno il volantino di ${s.name}…`);
+    try { const r = await fetchFlyerOnline(s, flyerAbort.signal); done.push(`${s.name}: ${r.n ? r.n + " offerte" + (r.until ? " fino al " + r.until.split("-").reverse().join("/") : "") : "nessun volantino trovato"}`); }
+    catch(e){ if (e && e.code === "cancelled") break; done.push(`${s.name}: ${aiError(e)}`); if (e && (e.code === "bad_key" || e.code === "no_key" || e.code === "offline")) break; }
+  }
+  prog.hidden = true; flyerAbort = null;
+  if (opts.silent) setSync("Volantini aggiornati");
+  msg.innerHTML = done.map(t => `<div>${esc(t)}</div>`).join("");
+}
+$("#webFlyer").onclick = () => { const s = state.stores.find(x => x.id === $("#flyerStore").value); runOnline(s ? [s] : []); };
+$("#webFlyerAll").onclick = () => runOnline(state.stores.slice());
+function staleStores(){
+  const d = today(), meta = state.flyerMeta || {};
+  return state.stores.filter(s => { const m = meta[s.id]; return !m || (Date.now() - m.at) > 3 * 864e5 || (m.until && m.until < d); });
+}
+setTimeout(() => {
+  if (state.autoFlyers && hasKey() && navigator.onLine !== false) { const st = staleStores(); if (st.length) runOnline(st, {silent:true}); }
+}, 2500);
+
+function renderExtra(){
+  renderKeyBanner();
+  renderNearby();
+  $("#autoFlyers").checked = !!state.autoFlyers;
+}
+
+/* app installabile */
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch(e){}
+
+/* scorciatoie dall'icona: #lista, #carte, … */
+{ const h = location.hash.slice(1); if (["lista","confronta","ricette","carte","storico"].includes(h)) currentTab = h; }
+
+showTab(currentTab);
+boot();
+})();
+</script>
+</body>
+</html>
