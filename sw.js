@@ -1,5 +1,5 @@
 // Service worker di Spesa Furba: l'app si apre anche offline.
-const VERSION = "sf-1.0.0";
+const VERSION = "sf-1.0.1";
 const SHELL = ["./", "index.html", "claude.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

@@ -1,5 +1,5 @@
 /* ---------- solo app installabile: impostazioni, GPS, volantini online, backup ---------- */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 const SET_TAB = "impostazioni";
 
 function hasKey(){ return !!(window.claudeSettings && window.claudeSettings.apiKey); }
@@ -173,3 +173,82 @@ try { navigator.storage && navigator.storage.persist && navigator.storage.persis
 
 /* scorciatoie dall'icona: #lista, #carte, … */
 { const h = location.hash.slice(1); if (["lista","confronta","ricette","carte","storico"].includes(h)) currentTab = h; }
+
+/* fotocamera: tasti che aprono direttamente la fotocamera, e lettore dal vivo per le carte */
+function addCameraButton(inputId, galleryLabelSel, text){
+  const input = $("#" + inputId), gallery = $(galleryLabelSel);
+  if (!input || !gallery) return;
+  const cam = document.createElement("label");
+  cam.className = gallery.className.includes("primary") ? "btn primary" : "btn"; cam.htmlFor = inputId; cam.textContent = text;
+  gallery.classList.remove("primary");
+  gallery.parentNode.insertBefore(cam, gallery);
+  const multi = input.multiple;
+  cam.addEventListener("click", () => { input.setAttribute("capture", "environment"); input.multiple = false; });
+  gallery.addEventListener("click", () => { input.removeAttribute("capture"); input.multiple = multi; });
+}
+addCameraButton("rcFile", "#rcBtn", "Scatta foto");
+$("#rcBtn").textContent = "Dalla galleria";
+addCameraButton("flyerFile", "#flyerBtn", "Fotografa");
+$("#flyerBtn").textContent = "PDF o galleria";
+$("#cardPhotoBtn").textContent = "Dalla galleria";
+
+const scanBox = document.createElement("div");
+scanBox.id = "scanBox"; scanBox.hidden = true;
+scanBox.innerHTML = `<div class="scan-in"><video id="scanVideo" playsinline muted></video><div class="scan-frame"></div><div class="scan-bar"><span id="scanTxt">Inquadra il codice a barre della carta</span><button type="button" id="scanClose">Chiudi</button></div></div>`;
+document.body.appendChild(scanBox);
+const scanCss = document.createElement("style");
+scanCss.textContent = `#scanBox{position:fixed;inset:0;z-index:20;background:#000;display:flex;align-items:center;justify-content:center}
+#scanBox .scan-in{position:relative;width:100%;height:100%}
+#scanBox video{width:100%;height:100%;object-fit:cover}
+#scanBox .scan-frame{position:absolute;left:10%;right:10%;top:38%;height:22%;border:3px solid var(--sun);border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+#scanBox .scan-bar{position:absolute;left:0;right:0;bottom:0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;gap:12px;align-items:center;justify-content:space-between;color:#fff;background:rgba(0,0,0,.6);font-size:15px}`;
+document.head.appendChild(scanCss);
+
+let scanReader = null, scanStream = null, scanLoop = 0;
+function stopScan(){
+  scanBox.hidden = true;
+  try { scanReader && scanReader.reset(); } catch(e){}
+  scanReader = null; cancelAnimationFrame(scanLoop);
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  const v = $("#scanVideo"); v.srcObject = null;
+}
+function scanned(text, format){
+  stopScan();
+  $("#cardNum").value = String(text).replace(/\s+/g, ""); $("#cardFmt").value = fmtFrom(format);
+  $("#cardMsg").textContent = $("#cardChain").value ? "Codice letto. Controlla e salva." : "Codice letto. Scrivi il nome del supermercato e salva.";
+  if (!$("#cardChain").value) $("#cardChain").focus();
+  try { navigator.vibrate && navigator.vibrate(80); } catch(e){}
+}
+async function startScan(){
+  const msg = $("#cardMsg");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.innerHTML = `<span class="err">Questo telefono non dà la fotocamera al browser. Usa "Dalla galleria".</span>`; return; }
+  scanBox.hidden = false; $("#scanTxt").textContent = "Inquadra il codice a barre della carta";
+  const video = $("#scanVideo");
+  const constraints = {video:{facingMode:{ideal:"environment"}, width:{ideal:1280}, height:{ideal:720}}};
+  try {
+    if ("BarcodeDetector" in window) {
+      scanStream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = scanStream; await video.play();
+      const det = new BarcodeDetector({formats:["ean_13","ean_8","code_128","code_39","upc_a","itf"]});
+      const tick = async () => {
+        if (scanBox.hidden) return;
+        try { const f = await det.detect(video); if (f && f[0] && f[0].rawValue) return scanned(f[0].rawValue, f[0].format); } catch(e){}
+        scanLoop = requestAnimationFrame(tick);
+      };
+      tick();
+    } else if (window.ZXing) {
+      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      scanReader = new ZXing.BrowserMultiFormatReader(hints);
+      await scanReader.decodeFromConstraints(constraints, video, (r) => { if (r && r.getText()) scanned(r.getText(), ZXing.BarcodeFormat[r.getBarcodeFormat()]); });
+    } else { throw new Error("nessun lettore"); }
+  } catch(e){
+    stopScan();
+    msg.innerHTML = `<span class="err">${e && e.name === "NotAllowedError" ? "Hai negato la fotocamera. Abilitala per Spesa Furba nelle impostazioni del telefono (Autorizzazioni → Fotocamera)." : "Non riesco ad aprire la fotocamera. Usa “Dalla galleria”."}</span>`;
+  }
+}
+$("#scanClose").onclick = stopScan;
+{
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = "Inquadra il codice";
+  b.onclick = startScan;
+  $("#cardPhotoBtn").parentNode.insertBefore(b, $("#cardPhotoBtn"));
+}
