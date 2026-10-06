@@ -995,7 +995,15 @@ $("#backupFile").onchange = async e => {
   show("home", false);
   if (location.hash === "#nuova") { history.replaceState({ v: "home" }, "", location.pathname); $("#newBtn").click(); }
 })();
-if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {}));
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" }).catch(() => {}));
+  // è arrivata una nuova versione dell'app: si ricarica appena si è nell'elenco, mai durante una riunione
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    const t = setInterval(() => { if (view === "home" && !rec.want) { clearInterval(t); location.reload(); } }, 1000);
+  });
+}
 </script>
 </body>
 </html>
