@@ -131,7 +131,6 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 
 <!-- ELENCO -->
 <section id="v-home">
-  <div class="note" id="keyBanner" hidden style="margin-top:14px">Per creare i riepiloghi serve la chiave API di Claude. <button type="button" class="ghost" id="keyBannerBtn" style="padding:0;min-height:0;color:var(--accent);font-weight:700">Inseriscila ora</button></div>
   <div class="row" style="margin-top:14px">
     <button type="button" class="primary big grow" id="newBtn" style="justify-content:center">+ Nuova riunione</button>
     <button type="button" class="big" id="importBtn">Importa testo</button>
@@ -142,7 +141,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
     <ol style="margin:0;padding-left:20px">
       <li>Scrivi i nomi dei partecipanti e appoggia il telefono al centro del tavolo, con lo schermo acceso.</li>
       <li>Durante la riunione l'app trascrive quello che si dice. Tocca il nome di chi prende la parola, così il riepilogo sa chi ha detto cosa (si può correggere anche dopo).</li>
-      <li>Alla fine tocca <b>Termina</b>: Claude prepara il riepilogo con decisioni, compiti e scadenze, pronto da condividere su WhatsApp, email o PDF.</li>
+      <li>Alla fine tocca <b>Termina</b> e poi <b>Copia e apri Claude</b>: nell'app Claude (gratis con il tuo abbonamento) incolli e ottieni il riepilogo con decisioni, compiti e scadenze. Lo incolli di nuovo qui e lo condividi su WhatsApp, email o PDF.</li>
     </ol>
     <p style="margin:8px 0 0">Funziona anche per riunioni di 2 ore e oltre: la trascrizione viene salvata di continuo sul telefono. Per riunioni online puoi importare la trascrizione di Teams, Meet o Zoom.</p>
   </div>
@@ -217,9 +216,27 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
     <div class="card" id="genCard">
       <label class="lbl" for="dInstr" style="margin-top:0">Indicazioni per il riepilogo (facoltativo)</label>
       <textarea id="dInstr" placeholder="Es. più breve; metti in evidenza costi e scadenze; scrivilo in inglese…" style="min-height:60px"></textarea>
+      <h3>Con l'app Claude, gratis con il tuo abbonamento</h3>
+      <ol class="small muted" style="margin:0;padding-left:20px">
+        <li>Tocca <b>Copia e apri Claude</b>: trascrizione e istruzioni vengono copiate.</li>
+        <li>In Claude tieni premuto nel campo del messaggio, scegli <b>Incolla</b> e invia.</li>
+        <li>Quando Claude ha finito, copia la risposta, torna qui e incollala sotto.</li>
+      </ol>
       <div class="row" style="margin-top:10px">
-        <button type="button" class="primary" id="genBtn">Crea il riepilogo</button>
-        <button type="button" id="genStop" hidden>Annulla</button>
+        <button type="button" class="primary" id="freeBtn">Copia e apri Claude</button>
+      </div>
+      <div id="freeMsg" class="small" style="margin-top:8px"></div>
+      <label class="lbl" for="pasteSum">Risposta di Claude</label>
+      <textarea id="pasteSum" placeholder="Incolla qui il riepilogo scritto da Claude"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="pasteSave">Salva il riepilogo</button>
+      </div>
+      <div id="apiGen" hidden>
+        <h3>Automatico, con la chiave API</h3>
+        <div class="row">
+          <button type="button" id="genBtn">Crea il riepilogo</button>
+          <button type="button" id="genStop" hidden>Annulla</button>
+        </div>
       </div>
       <div id="genMsg" class="small" style="margin-top:8px"></div>
     </div>
@@ -244,7 +261,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 <section id="v-settings" hidden>
   <div class="card">
     <h2>Claude</h2>
-    <div class="small muted">Serve per preparare i riepiloghi. La chiave resta salvata solo su questo telefono ed è la stessa usata da Spesa Furba.</div>
+    <div class="small muted">Facoltativa. Senza chiave il riepilogo si fa gratis nell'app Claude con il tuo abbonamento (copia e incolla). La chiave API, a pagamento a consumo, serve solo per farlo in automatico qui dentro. Resta salvata solo su questo telefono ed è la stessa di Spesa Furba.</div>
     <label class="lbl" for="apiKey">Chiave API</label>
     <div class="row">
       <input id="apiKey" class="grow" type="password" autocomplete="off" placeholder="sk-ant-…">
@@ -363,17 +380,15 @@ $("#settingsBtn").onclick = () => show("settings");
 /* ---------- elenco ---------- */
 async function load() { meetings = (await db.all().catch(() => [])).sort((a, b) => b.data.localeCompare(a.data)); }
 function renderHome() {
-  $("#keyBanner").hidden = hasKey();
   const box = $("#mlist");
   box.innerHTML = meetings.map(m => `<button type="button" class="mitem" data-id="${m.id}">
       <b>${esc(m.titolo || "Riunione senza titolo")}</b>
       <span class="small muted">${esc(fmtDate(m.data))} · ${fmtTime(m.data)} · ${fmtDur(m.durata || 0, true)}${m.partecipanti.length ? " · " + m.partecipanti.length + " persone" : ""}</span>
-      ${m.riepilogo ? '<span class="badge ok">riepilogo pronto</span>' : '<span class="badge">da riepilogare</span>'}
+      ${m.riepilogo || m.riepilogoTesto ? '<span class="badge ok">riepilogo pronto</span>' : '<span class="badge">da riepilogare</span>'}
     </button>`).join("");
   box.querySelectorAll(".mitem").forEach(b => b.onclick = () => openDetail(meetings.find(m => m.id === b.dataset.id)));
   $("#howto").hidden = meetings.length > 2;
 }
-$("#keyBannerBtn").onclick = () => show("settings");
 
 function newMeeting(fields) {
   return Object.assign({ id: uid(), titolo: "", data: new Date().toISOString(), lang: "it-IT", partecipanti: [], odg: "", segs: [], durata: 0, riepilogo: null, istruzioni: "", aggiornato: Date.now() }, fields);
@@ -599,10 +614,10 @@ function openDetail(m, opts = {}) {
   $("#dTitle").value = m.titolo;
   renderMeta();
   $("#dInstr").value = m.istruzioni || "";
-  setTab(m.riepilogo || m.segs.length ? "sum" : "tr");
+  setTab(m.riepilogo || m.riepilogoTesto || m.segs.length ? "sum" : "tr");
   renderSummary();
   renderTranscript();
-  if (opts.autoSummary && !m.riepilogo && m.segs.length && hasKey()) generate();
+  if (opts.autoSummary && !m.riepilogo && !m.riepilogoTesto && m.segs.length && hasKey()) generate();
 }
 function renderMeta() {
   const m = cur;
@@ -752,7 +767,7 @@ function errText(e) {
   return "Qualcosa non ha funzionato: " + ((e && e.message) || "errore sconosciuto") + ". Riprova.";
 }
 
-function buildPrompt(m) {
+function buildPrompt(m, plain) {
   const people = m.partecipanti.length ? m.partecipanti.join(", ") : "non indicati";
   return `Sei un segretario esperto. Devi scrivere il riepilogo di una riunione partendo dalla sua trascrizione.
 
@@ -776,7 +791,30 @@ Regole:
 - Frasi brevi e concrete. Conserva cifre, importi, quantità e date esattamente come detti.
 - Se un'informazione non c'è, lascia la lista vuota: non riempirla per forza.
 - Scrivi in italiano, salvo indicazioni diverse.
+${plain ? `
+Rispondi solo con il riepilogo, in testo semplice pronto da incollare su WhatsApp o in una email: niente tabelle, niente simboli di formattazione come # o **, nessuna frase prima o dopo. Usa questa struttura e ometti le sezioni vuote:
 
+RIEPILOGO: titolo breve e descrittivo
+${fmtDate(m.data)} · durata ${fmtDur(m.durata || 0, true)}
+Partecipanti: elenco dei partecipanti
+
+IN SINTESI
+3-6 frasi: di cosa si è parlato e cosa si è concluso
+
+DECISIONI PRESE
+• una decisione per riga
+
+COSE DA FARE
+• compito — chi (entro quando)
+
+TITOLO DI OGNI ARGOMENTO IN MAIUSCOLO
+• cosa è emerso, con chi l'ha detto se chiaro
+
+QUESTIONI APERTE
+• punto rimasto in sospeso
+
+PROSSIMO INCONTRO
+data o indicazioni` : `
 Rispondi solo con un oggetto JSON con questa forma:
 {
   "titolo": "titolo breve e descrittivo della riunione",
@@ -786,7 +824,7 @@ Rispondi solo con un oggetto JSON con questa forma:
   "azioni": [ { "cosa": "compito da fare", "chi": "persona responsabile o stringa vuota", "entro": "scadenza come detta, o stringa vuota" } ],
   "questioni_aperte": ["punto rimasto in sospeso o da approfondire"],
   "prossimo_incontro": "data o indicazioni del prossimo incontro, o stringa vuota"
-}`;
+}`}`;
 }
 
 let genCtl = null;
@@ -805,6 +843,7 @@ async function generate() {
     const r = await sample.json(buildPrompt(m), { modelTier: "complex", signal: genCtl.signal });
     if (!r || typeof r !== "object" || !r.sintesi) throw Object.assign(new Error("formato"), { code: "invalid_json" });
     m.riepilogo = { ...r, creato: new Date().toISOString() };
+    m.riepilogoTesto = "";
     if (r.titolo && /^Riunione (del|importata)/.test(m.titolo)) { m.titolo = r.titolo; $("#dTitle").value = r.titolo; }
     await saveNow();
     $("#genMsg").textContent = "";
@@ -817,10 +856,37 @@ async function generate() {
   }
 }
 $("#genBtn").onclick = generate;
+$("#freeBtn").onclick = async () => {
+  const m = cur, msg = $("#freeMsg");
+  if (!m.segs.length) { msg.innerHTML = '<span class="err">Non c\'è ancora testo da riepilogare.</span>'; return; }
+  m.istruzioni = $("#dInstr").value.trim(); saveSoon();
+  const text = buildPrompt(m, true);
+  try {
+    await navigator.clipboard.writeText(text);
+    msg.innerHTML = '<span class="okc">Copiato. In Claude tieni premuto nel campo del messaggio, scegli Incolla e invia.</span>';
+    window.open("https://claude.ai/new", "_blank", "noopener");
+  } catch (e) {
+    // senza appunti: si scarica il file da allegare in Claude
+    download(safeName(m.titolo) + " - per Claude.txt", text);
+    msg.innerHTML = '<span class="warnc">Non riesco a copiare: ho scaricato un file. Allegalo in una nuova chat di Claude e invia.</span>';
+    window.open("https://claude.ai/new", "_blank", "noopener");
+  }
+};
+$("#pasteSave").onclick = async () => {
+  const m = cur, t = $("#pasteSum").value.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
+  if (!t) { $("#freeMsg").innerHTML = '<span class="err">Incolla prima la risposta di Claude.</span>'; return; }
+  m.riepilogoTesto = t; m.riepilogo = null;
+  const first = t.split("\n")[0].match(/^RIEPILOGO:\s*(.+)$/i);
+  if (first && /^Riunione (del|importata)/.test(m.titolo)) { m.titolo = first[1].trim(); $("#dTitle").value = m.titolo; }
+  $("#pasteSum").value = ""; $("#freeMsg").textContent = "";
+  await saveNow();
+  renderSummary(); window.scrollTo(0, 0);
+};
 $("#genStop").onclick = () => genCtl && genCtl.abort();
 
 const arr = a => Array.isArray(a) ? a.filter(x => x && (typeof x !== "string" || x.trim())) : [];
 function summaryHtml(m, forPrint) {
+  if (m.riepilogoTesto) return `<div class="sum" style="white-space:pre-wrap">${esc(m.riepilogoTesto)}</div>`;
   const r = m.riepilogo;
   const list = (title, items) => items.length ? `<h3>${title}</h3><ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : "";
   const acts = arr(r.azioni);
@@ -837,6 +903,7 @@ function summaryHtml(m, forPrint) {
   </div>`;
 }
 function summaryText(m) {
+  if (m.riepilogoTesto) return m.riepilogoTesto;
   const r = m.riepilogo;
   const L = [];
   L.push(`RIEPILOGO: ${m.titolo || r.titolo}`);
@@ -854,8 +921,11 @@ function summaryText(m) {
 }
 function renderSummary() {
   const m = cur, box = $("#sumBox");
-  $("#genBtn").textContent = m.riepilogo ? "Rifai il riepilogo" : "Crea il riepilogo";
-  if (!m.riepilogo) {
+  const has = m.riepilogo || m.riepilogoTesto;
+  $("#genBtn").textContent = has ? "Rifai il riepilogo" : "Crea il riepilogo";
+  $("#apiGen").hidden = !hasKey();
+  $("#genCard").hidden = !m.segs.length;
+  if (!has) {
     box.innerHTML = m.segs.length ? "" : '<div class="card muted">Questa riunione non ha ancora testo. Vai su <b>Trascrizione</b> per registrare o aggiungere testo.</div>';
     return;
   }
