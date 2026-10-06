@@ -34,7 +34,7 @@ App per le riunioni con più persone, in `riunioni/` (pubblicata su `/riunioni/`
 - **Trascrizione dal vivo** con il riconoscimento vocale del browser (Chrome su Android/PC, Safari su iPhone), anche per riunioni di 2 ore e oltre: si riavvia da sola dopo i silenzi, tiene lo schermo acceso e salva di continuo sul telefono
 - **Chi parla**: si tocca il nome di chi prende la parola; si può correggere dopo nella trascrizione
 - **Appunti** scritti durante la riunione (decisioni, cifre), che il riepilogo considera affidabili
-- **Riepilogo con Claude**: sintesi, decisioni, cose da fare (chi/entro quando), argomenti, questioni aperte
+- **Riepilogo con Claude**, gratis con l'abbonamento: un tasto copia trascrizione e istruzioni e apre l'app Claude, poi si incolla qui la risposta (con la chiave API, facoltativa, si fa in automatico): sintesi, decisioni, cose da fare (chi/entro quando), argomenti, questioni aperte
 - **Condivisione**: WhatsApp e altre app, email, copia, PDF/stampa, file di testo
 - **Importa** trascrizioni di Teams, Meet o Zoom (.vtt, .srt, .txt) per le riunioni online
 

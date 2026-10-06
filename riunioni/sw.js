@@ -1,5 +1,5 @@
 // Service worker di Riunioni: l'app si apre anche offline.
-const VERSION = "riunioni-1.0.0";
+const VERSION = "riunioni-1.0.1";
 const SHELL = ["./", "index.html", "../claude.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
