@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#24456b">
+<meta name="description" content="Trascrive le riunioni con più persone e prepara un riepilogo chiaro da condividere.">
+<title>Riunioni</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script src="../claude.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#fff; --ink:#18212d; --muted:#5f6b7a; --line:#dde3ea;
+  --accent:#24456b; --accent-ink:#fff; --soft:#e8eef6; --rec:#c62f2f; --ok:#1f7a4a; --warn:#9a6200; --hl:#ffc457;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161d; --card:#1a212b; --ink:#e8edf3; --muted:#9aa6b4; --line:#2c3643;
+    --accent:#7fa8d9; --accent-ink:#0d1520; --soft:#223042; --rec:#ff6b6b; --ok:#5cc58c; --warn:#e3b04b; --hl:#ffc457;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161d; --card:#1a212b; --ink:#e8edf3; --muted:#9aa6b4; --line:#2c3643;
+  --accent:#7fa8d9; --accent-ink:#0d1520; --soft:#223042; --rec:#ff6b6b; --ok:#5cc58c; --warn:#e3b04b; --hl:#ffc457;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+[hidden]{display:none!important}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 40px}
+header.top{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;padding:10px 16px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) header.top{background:#1d3550}}
+:root[data-theme="dark"] header.top{background:#1d3550}
+header.top .in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:10px}
+header.top h1{font-size:18px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header.top button{color:#fff}
+h2{font-size:17px;margin:0 0 8px}
+h3{font-size:15px;margin:16px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+.muted{color:var(--muted)} .small{font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:0}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;min-height:42px}
+button:disabled{opacity:.5;cursor:default}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.danger{color:var(--rec);border-color:var(--rec);background:transparent}
+.ghost{background:transparent;border-color:transparent;padding:6px 8px}
+.big{font-size:17px;padding:12px 20px;min-height:52px;border-radius:14px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+textarea{resize:vertical;min-height:80px}
+label.lbl{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}
+.err{color:var(--rec)} .okc{color:var(--ok)} .warnc{color:var(--warn)}
+.note{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:14px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+/* elenco riunioni */
+.mlist{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.mitem{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-align:left;display:block;width:100%}
+.mitem b{display:block;font-size:16px}
+.badge{display:inline-block;font-size:12px;border-radius:999px;padding:1px 8px;background:var(--soft);color:var(--ink);margin-left:4px}
+.badge.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+
+/* partecipanti */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--soft);border-radius:999px;padding:4px 6px 4px 12px}
+.chip button{min-height:28px;padding:0 8px;border:none;background:transparent;color:var(--muted)}
+
+/* registrazione */
+.livebar{display:flex;align-items:center;gap:12px;margin-top:14px}
+.timer{font-variant-numeric:tabular-nums;font-size:28px;font-weight:700}
+.status{font-size:13px;border-radius:999px;padding:3px 10px;background:var(--soft)}
+.status.on{background:var(--rec);color:#fff}
+.status.on::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:6px;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.2}}
+.speakers{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:8px}
+.spk{justify-content:center;min-height:54px;font-weight:600;text-align:center;line-height:1.2}
+.spk.on{background:var(--hl);border-color:var(--hl);color:#1a1a1a}
+.spk.unk{font-weight:400;color:var(--muted)}
+.feed{margin-top:14px;max-height:42vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 12px}
+.seg{padding:6px 0;border-bottom:1px solid var(--line)}
+.seg:last-child{border-bottom:none}
+.seg .who{font-weight:700;font-size:13px}
+.seg .tm{font-size:12px;color:var(--muted);margin-left:6px;font-variant-numeric:tabular-nums}
+.seg.notekind{background:color-mix(in srgb,var(--hl) 22%,transparent);margin:4px -8px;padding:6px 8px;border-radius:8px;border:none}
+.interim{color:var(--muted);font-style:italic;padding:6px 0;min-height:1.5em}
+.controls{display:flex;gap:10px;margin-top:14px}
+.controls button{flex:1;justify-content:center}
+
+/* dettaglio */
+.tabs{display:flex;gap:4px;margin-top:14px;border-bottom:1px solid var(--line)}
+.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:transparent;font-weight:600;color:var(--muted)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.sum h2{font-size:20px}
+.sum ul{margin:4px 0;padding-left:20px}
+.sum li{margin:3px 0}
+.act{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.act div{background:var(--soft);border-radius:10px;padding:8px 12px}
+.act .meta{font-size:13px;color:var(--muted)}
+.share{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.tseg{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.tseg select{width:auto;padding:4px 6px;font-size:13px;font-weight:700;min-height:32px}
+.tseg .tx{grid-column:1/-1;white-space:pre-wrap;cursor:text}
+.tseg textarea{grid-column:1/-1}
+.tseg .tm{font-size:12px;color:var(--muted);align-self:center}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);width:min(560px,calc(100vw - 32px));padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+#printArea{display:none}
+@media print{
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block;color:#000;font:12pt/1.45 Georgia,serif}
+  #printArea .act div{background:#f2f2f2}
+  #printArea .meta{color:#444}
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <button type="button" class="ghost" id="backBtn" aria-label="Indietro" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <h1 id="topTitle">Riunioni</h1>
+  <button type="button" class="ghost" id="settingsBtn" aria-label="Impostazioni"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>
+</div></header>
+
+<main class="wrap">
+
+<!-- ELENCO -->
+<section id="v-home">
+  <div class="note" id="keyBanner" hidden style="margin-top:14px">Per creare i riepiloghi serve la chiave API di Claude. <button type="button" class="ghost" id="keyBannerBtn" style="padding:0;min-height:0;color:var(--accent);font-weight:700">Inseriscila ora</button></div>
+  <div class="row" style="margin-top:14px">
+    <button type="button" class="primary big grow" id="newBtn" style="justify-content:center">+ Nuova riunione</button>
+    <button type="button" class="big" id="importBtn">Importa testo</button>
+  </div>
+  <div class="mlist" id="mlist"></div>
+  <div class="card small muted" id="howto">
+    <h2 style="color:var(--ink)">Come funziona</h2>
+    <ol style="margin:0;padding-left:20px">
+      <li>Scrivi i nomi dei partecipanti e appoggia il telefono al centro del tavolo, con lo schermo acceso.</li>
+      <li>Durante la riunione l'app trascrive quello che si dice. Tocca il nome di chi prende la parola, così il riepilogo sa chi ha detto cosa (si può correggere anche dopo).</li>
+      <li>Alla fine tocca <b>Termina</b>: Claude prepara il riepilogo con decisioni, compiti e scadenze, pronto da condividere su WhatsApp, email o PDF.</li>
+    </ol>
+    <p style="margin:8px 0 0">Funziona anche per riunioni di 2 ore e oltre: la trascrizione viene salvata di continuo sul telefono. Per riunioni online puoi importare la trascrizione di Teams, Meet o Zoom.</p>
+  </div>
+</section>
+
+<!-- NUOVA -->
+<section id="v-setup" hidden>
+  <div class="card">
+    <label class="lbl" for="sTitle" style="margin-top:0">Titolo</label>
+    <input id="sTitle" placeholder="Es. Riunione di cantiere, Consiglio soci…">
+    <label class="lbl" for="sPerson">Partecipanti</label>
+    <div class="row">
+      <input id="sPerson" class="grow" placeholder="Nome e premi Aggiungi" autocomplete="off" enterkeyhint="done">
+      <button type="button" id="sAdd">Aggiungi</button>
+    </div>
+    <div class="chips" id="sChips"></div>
+    <div class="small muted" style="margin-top:6px">Puoi aggiungere persone anche durante la riunione.</div>
+    <label class="lbl" for="sLang">Lingua parlata</label>
+    <select id="sLang">
+      <option value="it-IT">Italiano</option>
+      <option value="en-US">Inglese</option>
+      <option value="fr-FR">Francese</option>
+      <option value="de-DE">Tedesco</option>
+      <option value="es-ES">Spagnolo</option>
+    </select>
+    <label class="lbl" for="sGoal">Ordine del giorno o note iniziali (facoltativo)</label>
+    <textarea id="sGoal" placeholder="Es. 1) avanzamento lavori 2) preventivo impianto 3) varie"></textarea>
+  </div>
+  <div class="note warnc" id="noSpeech" hidden style="margin-top:14px">Questo browser non trascrive la voce. Usa Chrome (Android o computer) oppure Safari (iPhone). Puoi comunque scrivere appunti o importare una trascrizione.</div>
+  <div class="row" style="margin-top:14px">
+    <button type="button" class="primary big grow" id="sStart" style="justify-content:center">Inizia la riunione</button>
+  </div>
+  <p class="small muted">La trascrizione dal vivo usa il riconoscimento vocale del browser (servizio di Google su Chrome, di Apple su Safari): serve connessione internet. Il testo resta salvato su questo telefono; a Claude viene inviato solo quando crei il riepilogo.</p>
+</section>
+
+<!-- REGISTRAZIONE -->
+<section id="v-live" hidden>
+  <div class="livebar">
+    <span class="timer" id="lTimer">0:00:00</span>
+    <span class="status" id="lStatus">In pausa</span>
+    <span class="grow"></span>
+    <span class="small muted" id="lCount"></span>
+  </div>
+  <div class="small warnc" id="lWarn" style="margin-top:6px"></div>
+  <h3>Chi sta parlando?</h3>
+  <div class="speakers" id="lSpeakers"></div>
+  <div class="feed" id="lFeed"><div id="lSegs"></div><div class="interim" id="lInterim"></div></div>
+  <div class="row" style="margin-top:10px">
+    <input id="lNote" class="grow" placeholder="Scrivi un appunto, una decisione…" enterkeyhint="send">
+    <button type="button" id="lNoteBtn">Aggiungi</button>
+  </div>
+  <div class="controls">
+    <button type="button" class="big" id="lPause">Pausa</button>
+    <button type="button" class="big primary" id="lStop">Termina</button>
+  </div>
+  <p class="small muted">Tieni l'app aperta e il telefono in carica: se lo schermo si spegne o cambi app, la trascrizione si ferma. Quando torni riprende da sola.</p>
+</section>
+
+<!-- DETTAGLIO -->
+<section id="v-detail" hidden>
+  <div class="card" style="padding:12px 16px">
+    <input id="dTitle" style="font-size:18px;font-weight:700;border-color:transparent;padding:4px 0;background:transparent" aria-label="Titolo">
+    <div class="small muted" id="dMeta"></div>
+  </div>
+  <div class="tabs">
+    <button type="button" data-t="sum" class="on">Riepilogo</button>
+    <button type="button" data-t="tr">Trascrizione</button>
+  </div>
+
+  <div id="t-sum">
+    <div id="sumBox"></div>
+    <div class="card" id="genCard">
+      <label class="lbl" for="dInstr" style="margin-top:0">Indicazioni per il riepilogo (facoltativo)</label>
+      <textarea id="dInstr" placeholder="Es. più breve; metti in evidenza costi e scadenze; scrivilo in inglese…" style="min-height:60px"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="primary" id="genBtn">Crea il riepilogo</button>
+        <button type="button" id="genStop" hidden>Annulla</button>
+      </div>
+      <div id="genMsg" class="small" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div id="t-tr" hidden>
+    <div class="row" style="margin-top:14px">
+      <button type="button" class="primary" id="dResume">Continua a registrare</button>
+      <button type="button" id="dAddText">Aggiungi testo</button>
+      <button type="button" id="dDownTr">Scarica</button>
+    </div>
+    <div class="small muted" style="margin-top:8px">Tocca un testo per correggerlo; cambia il nome per correggere chi parla.</div>
+    <div id="trList" style="margin-top:6px"></div>
+  </div>
+
+  <div class="row" style="margin-top:24px">
+    <button type="button" class="danger" id="dDelete">Elimina riunione</button>
+  </div>
+</section>
+
+<!-- IMPOSTAZIONI -->
+<section id="v-settings" hidden>
+  <div class="card">
+    <h2>Claude</h2>
+    <div class="small muted">Serve per preparare i riepiloghi. La chiave resta salvata solo su questo telefono ed è la stessa usata da Spesa Furba.</div>
+    <label class="lbl" for="apiKey">Chiave API</label>
+    <div class="row">
+      <input id="apiKey" class="grow" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <button type="button" id="apiKeyShow" class="ghost">Mostra</button>
+    </div>
+    <label class="lbl" for="aiModel">Modello</label>
+    <select id="aiModel"></select>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="primary" id="apiSave">Salva e prova</button>
+      <a class="btn" href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Crea una chiave ↗</a>
+    </div>
+    <div id="apiMsg" class="small" style="margin-top:8px"></div>
+    <details class="small muted" style="margin-top:10px"><summary>Quanto costa</summary>
+      <p>Paghi solo quello che usi sul tuo account Anthropic. Il riepilogo di una riunione di 2 ore con Claude Opus 5.5 costa all'incirca 20–40 centesimi; con Sonnet 5.5 circa la metà. La trascrizione dal vivo è gratuita.</p>
+    </details>
+  </div>
+  <div class="card">
+    <h2>I tuoi dati</h2>
+    <div class="small muted">Le riunioni sono salvate solo su questo telefono. Fai ogni tanto una copia di sicurezza.</div>
+    <div class="row" style="margin-top:10px">
+      <button type="button" id="backupSave">Salva una copia</button>
+      <label class="btn" for="backupFile">Ripristina da file</label>
+      <input type="file" id="backupFile" accept="application/json,.json" class="vh" tabindex="-1">
+    </div>
+    <div id="backupMsg" class="small" style="margin-top:8px"></div>
+  </div>
+</section>
+</main>
+
+<dialog id="dlgText">
+  <h2 id="dlgTextTitle">Importa testo</h2>
+  <div class="small muted" id="dlgTextHelp">Incolla la trascrizione oppure scegli un file (.txt, .vtt, .srt di Teams, Meet o Zoom). Le righe nella forma «Nome: testo» vengono attribuite a quella persona.</div>
+  <textarea id="dlgTextArea" style="min-height:200px;margin-top:10px"></textarea>
+  <div class="row" style="margin-top:10px">
+    <label class="btn" for="dlgTextFile">Scegli file</label>
+    <input type="file" id="dlgTextFile" accept=".txt,.vtt,.srt,text/plain,text/vtt" class="vh" tabindex="-1">
+    <span class="grow"></span>
+    <button type="button" id="dlgTextCancel">Annulla</button>
+    <button type="button" class="primary" id="dlgTextOk">Importa</button>
+  </div>
+</dialog>
+
+<div id="printArea"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const UNK = "";  // parlante non indicato
+
+/* ---------- archivio (IndexedDB) ---------- */
+const db = (() => {
+  let p;
+  const open = () => p || (p = new Promise((res, rej) => {
+    const r = indexedDB.open("riunioni", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("m", { keyPath: "id" });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = async (mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction("m", mode); const r = fn(t.objectStore("m")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+  return {
+    all: () => tx("readonly", s => s.getAll()),
+    put: m => tx("readwrite", s => s.put(m)),
+    del: id => tx("readwrite", s => s.delete(id)),
+  };
+})();
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+
+let meetings = [];
+let cur = null;          // riunione aperta
+let saveTimer = null;
+function saveSoon() { if (!cur) return; cur.aggiornato = Date.now(); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 800); }
+function saveNow() { clearTimeout(saveTimer); if (cur) return db.put(cur).catch(e => showWarn("Non riesco a salvare: " + e.message)); }
+
+/* ---------- utilità ---------- */
+function fmtDur(ms, long) {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  if (long) return h ? `${h} h ${m} min` : `${m} min`;
+  return `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+const fmtTm = ms => { const m = Math.floor(ms / 60000); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+const fmtDate = iso => new Date(iso).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const fmtTime = iso => new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: type || "text/plain;charset=utf-8" }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const safeName = s => (s || "riunione").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 60);
+function hasKey() { return !!(window.claudeSettings && window.claudeSettings.apiKey); }
+
+/* ---------- navigazione ---------- */
+const VIEWS = ["home", "setup", "live", "detail", "settings"];
+let view = "home";
+function show(v, push = true) {
+  view = v;
+  VIEWS.forEach(x => $("#v-" + x).hidden = x !== v);
+  $("#backBtn").hidden = v === "home";
+  $("#settingsBtn").hidden = v === "live";
+  $("#topTitle").textContent = { home: "Riunioni", setup: "Nuova riunione", live: (cur && cur.titolo) || "Riunione", detail: "Riunione", settings: "Impostazioni" }[v];
+  if (push && v !== "home") history.pushState({ v }, "");
+  window.scrollTo(0, 0);
+  if (v === "home") renderHome();
+  if (v === "settings") renderSettings();
+}
+window.addEventListener("popstate", e => {
+  if (view === "live" && rec.want) { history.pushState({ v: "live" }, ""); if (confirm("Vuoi terminare la registrazione?")) stopMeeting(); return; }
+  if (view === "live") { stopMeeting(); return; }
+  if (e.state && e.state.v === "detail" && cur && meetings.includes(cur)) { show("detail", false); renderMeta(); renderSummary(); renderTranscript(); return; }
+  show("home", false);
+});
+$("#backBtn").onclick = () => history.back();
+$("#settingsBtn").onclick = () => show("settings");
+
+/* ---------- elenco ---------- */
+async function load() { meetings = (await db.all().catch(() => [])).sort((a, b) => b.data.localeCompare(a.data)); }
+function renderHome() {
+  $("#keyBanner").hidden = hasKey();
+  const box = $("#mlist");
+  box.innerHTML = meetings.map(m => `<button type="button" class="mitem" data-id="${m.id}">
+      <b>${esc(m.titolo || "Riunione senza titolo")}</b>
+      <span class="small muted">${esc(fmtDate(m.data))} · ${fmtTime(m.data)} · ${fmtDur(m.durata || 0, true)}${m.partecipanti.length ? " · " + m.partecipanti.length + " persone" : ""}</span>
+      ${m.riepilogo ? '<span class="badge ok">riepilogo pronto</span>' : '<span class="badge">da riepilogare</span>'}
+    </button>`).join("");
+  box.querySelectorAll(".mitem").forEach(b => b.onclick = () => openDetail(meetings.find(m => m.id === b.dataset.id)));
+  $("#howto").hidden = meetings.length > 2;
+}
+$("#keyBannerBtn").onclick = () => show("settings");
+
+function newMeeting(fields) {
+  return Object.assign({ id: uid(), titolo: "", data: new Date().toISOString(), lang: "it-IT", partecipanti: [], odg: "", segs: [], durata: 0, riepilogo: null, istruzioni: "", aggiornato: Date.now() }, fields);
+}
+
+/* ---------- nuova riunione ---------- */
+let setupPeople = [];
+function renderChips() {
+  $("#sChips").innerHTML = setupPeople.map((p, i) => `<span class="chip">${esc(p)}<button type="button" data-i="${i}" aria-label="Togli ${esc(p)}">✕</button></span>`).join("");
+  $("#sChips").querySelectorAll("button").forEach(b => b.onclick = () => { setupPeople.splice(+b.dataset.i, 1); renderChips(); });
+}
+function addPerson() {
+  const v = $("#sPerson").value.trim();
+  v.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean).forEach(n => { if (!setupPeople.some(p => p.toLowerCase() === n.toLowerCase())) setupPeople.push(n); });
+  $("#sPerson").value = ""; renderChips(); $("#sPerson").focus();
+}
+$("#sAdd").onclick = addPerson;
+$("#sPerson").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPerson(); } });
+$("#newBtn").onclick = () => {
+  setupPeople = []; renderChips();
+  $("#sTitle").value = ""; $("#sGoal").value = "";
+  try { $("#sLang").value = localStorage.getItem("riunioni.lang") || "it-IT"; } catch (e) {}
+  $("#noSpeech").hidden = !!SR;
+  show("setup");
+};
+$("#sStart").onclick = async () => {
+  if ($("#sPerson").value.trim()) addPerson();
+  const lang = $("#sLang").value;
+  try { localStorage.setItem("riunioni.lang", lang); } catch (e) {}
+  cur = newMeeting({ titolo: $("#sTitle").value.trim() || "Riunione del " + new Date().toLocaleDateString("it-IT"), partecipanti: setupPeople.slice(), lang, odg: $("#sGoal").value.trim() });
+  meetings.unshift(cur);
+  await saveNow();
+  history.replaceState({ v: "live" }, "");
+  startLive();
+};
+
+/* ---------- trascrizione dal vivo ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const rec = { want: false, inst: null, session: 0, lastSegBySession: {}, startedAt: 0, errors: 0, speaker: UNK, wake: null, tick: null };
+
+function elapsed() { return (cur ? cur.durata : 0) + (rec.startedAt ? Date.now() - rec.startedAt : 0); }
+function showWarn(t) { $("#lWarn").textContent = t || ""; }
+function setStatus() {
+  const st = $("#lStatus");
+  st.className = "status" + (rec.want ? " on" : "");
+  st.textContent = rec.want ? "In ascolto" : "In pausa";
+  $("#lPause").textContent = rec.want ? "Pausa" : (cur && cur.segs.length ? "Riprendi" : "Avvia");
+  $("#lCount").textContent = cur ? `${cur.segs.length} interventi` : "";
+}
+
+function startLive() {
+  rec.speaker = UNK;
+  $("#lSegs").innerHTML = "";
+  cur.segs.slice(-60).forEach(appendSeg);
+  $("#lInterim").textContent = "";
+  renderSpeakers();
+  show("live", false);
+  $("#topTitle").textContent = cur.titolo;
+  showWarn(SR ? "" : "Questo browser non trascrive la voce: usa Chrome o Safari. Puoi comunque scrivere appunti.");
+  clearInterval(rec.tick);
+  rec.tick = setInterval(() => { $("#lTimer").textContent = fmtDur(elapsed()); }, 500);
+  $("#lTimer").textContent = fmtDur(elapsed());
+  if (SR) resume(); else setStatus();
+}
+
+function renderSpeakers() {
+  const box = $("#lSpeakers");
+  box.innerHTML = cur.partecipanti.map(p => `<button type="button" class="spk${rec.speaker === p ? " on" : ""}" data-p="${esc(p)}">${esc(p)}</button>`).join("")
+    + `<button type="button" class="spk unk${rec.speaker === UNK ? " on" : ""}" data-p="">Non so / altri</button>`
+    + `<button type="button" class="spk unk" id="spkAdd">+ Persona</button>`;
+  box.querySelectorAll(".spk[data-p]").forEach(b => b.onclick = () => { rec.speaker = b.dataset.p; renderSpeakers(); });
+  $("#spkAdd").onclick = () => {
+    const n = (prompt("Nome della persona") || "").trim();
+    if (!n) return;
+    if (!cur.partecipanti.includes(n)) cur.partecipanti.push(n);
+    rec.speaker = n; renderSpeakers(); saveSoon();
+  };
+}
+
+function segHtml(s) {
+  return `<span class="who">${s.k === "note" ? "📝 Appunto" : esc(s.s || "?")}</span><span class="tm">${fmtTm(s.t)}</span><div>${esc(s.x)}</div>`;
+}
+function appendSeg(s) {
+  const d = document.createElement("div");
+  d.className = "seg" + (s.k === "note" ? " notekind" : "");
+  d.id = "seg-" + s.id;
+  d.innerHTML = segHtml(s);
+  const feed = $("#lFeed"), atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+  $("#lSegs").appendChild(d);
+  while ($("#lSegs").childElementCount > 120) $("#lSegs").firstElementChild.remove();
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+
+const norm = t => t.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
+function onFinal(text, idx) {
+  text = text.trim();
+  if (!text) return;
+  // alcuni Chrome per Android ripetono i risultati già dati, allungandoli: si sostituisce invece di aggiungere
+  const key = rec.session + ":" + idx;
+  const last = rec.lastSegBySession[rec.session];
+  let seg = rec.byIdx && rec.byIdx[key];
+  // stesso indice ma frase diversa: è un intervento nuovo, non va mai sovrascritto
+  if (seg && !norm(text).startsWith(norm(seg.x)) && !norm(seg.x).startsWith(norm(text))) seg = null;
+  if (!seg && last && last.s === rec.speaker && norm(last.x) && norm(text).startsWith(norm(last.x))) seg = last;
+  if (seg) {
+    if (norm(seg.x) === norm(text)) return;
+    if (norm(text).length < norm(seg.x).length && norm(seg.x).startsWith(norm(text))) return;
+    seg.x = text;
+    const el = document.getElementById("seg-" + seg.id);
+    if (el) el.innerHTML = segHtml(seg);
+  } else {
+    if (text.length > 1) text = text[0].toUpperCase() + text.slice(1);
+    seg = { id: uid(), t: elapsed(), s: rec.speaker, x: text, k: "speech" };
+    cur.segs.push(seg);
+    appendSeg(seg);
+  }
+  rec.byIdx = rec.byIdx || {};
+  rec.byIdx[key] = seg;
+  rec.lastSegBySession[rec.session] = seg;
+  setStatus();
+  saveSoon();
+}
+
+function startRecognizer() {
+  if (!rec.want) return;
+  const r = new SR();
+  r.lang = cur.lang || "it-IT";
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+  rec.session++;
+  rec.byIdx = {};
+  const session = rec.session;
+  r.onresult = e => {
+    if (session !== rec.session) return;
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) onFinal(res[0].transcript, i); else interim += res[0].transcript;
+    }
+    $("#lInterim").textContent = interim ? (rec.speaker ? rec.speaker + ": " : "") + interim : "";
+    rec.errors = 0;
+    showWarn("");
+    if (interim) { const f = $("#lFeed"); if (f.scrollHeight - f.scrollTop - f.clientHeight < 120) f.scrollTop = f.scrollHeight; }
+  };
+  r.onerror = e => {
+    if (e.error === "no-speech" || e.error === "aborted") return;
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      showWarn("Il microfono è bloccato. Consenti l'uso del microfono a questa pagina nelle impostazioni del browser, poi tocca Riprendi.");
+      pause(); return;
+    }
+    if (e.error === "network") showWarn("Connessione assente: la trascrizione riprende appena torna internet.");
+    else if (e.error === "audio-capture") showWarn("Il microfono non è disponibile (forse lo usa un'altra app).");
+    else if (e.error === "language-not-supported") { showWarn("Questa lingua non è disponibile per la trascrizione su questo telefono."); pause(); return; }
+    rec.errors++;
+  };
+  r.onend = () => {
+    if (session !== rec.session) return;
+    $("#lInterim").textContent = "";
+    rec.inst = null;
+    // il riconoscimento si ferma da solo dopo un po' di silenzio: si riavvia finché la riunione è in corso
+    if (rec.want && document.visibilityState === "visible") setTimeout(startRecognizer, Math.min(250 * 2 ** Math.min(rec.errors, 5), 8000));
+  };
+  try { r.start(); rec.inst = r; } catch (e) { rec.errors++; setTimeout(startRecognizer, 1000); }
+}
+
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && !rec.wake) { rec.wake = await navigator.wakeLock.request("screen"); rec.wake.addEventListener("release", () => { rec.wake = null; }); } } catch (e) {}
+}
+function resume() {
+  if (rec.want) return;
+  rec.want = true; rec.errors = 0;
+  rec.startedAt = Date.now();
+  keepAwake();
+  if (SR) startRecognizer();
+  setStatus();
+}
+function pause() {
+  if (rec.startedAt) { cur.durata += Date.now() - rec.startedAt; rec.startedAt = 0; }
+  rec.want = false;
+  rec.session++;
+  if (rec.inst) { try { rec.inst.stop(); } catch (e) {} rec.inst = null; }
+  if (rec.wake) { rec.wake.release().catch(() => {}); rec.wake = null; }
+  $("#lInterim").textContent = "";
+  setStatus(); saveSoon();
+}
+document.addEventListener("visibilitychange", () => {
+  if (view !== "live" || !rec.want) return;
+  if (document.visibilityState === "visible") {
+    keepAwake();
+    if (!rec.inst && SR) startRecognizer();
+  } else saveNow();
+});
+window.addEventListener("pagehide", () => { if (rec.startedAt && cur) { cur.durata += Date.now() - rec.startedAt; rec.startedAt = Date.now(); } saveNow(); });
+
+$("#lPause").onclick = () => rec.want ? pause() : (SR ? resume() : showWarn("Questo browser non trascrive la voce."));
+function addNote() {
+  const t = $("#lNote").value.trim();
+  if (!t) return;
+  const seg = { id: uid(), t: elapsed(), s: "", x: t, k: "note" };
+  cur.segs.push(seg); appendSeg(seg);
+  $("#lNote").value = ""; setStatus(); saveSoon();
+}
+$("#lNoteBtn").onclick = addNote;
+$("#lNote").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
+
+async function stopMeeting() {
+  pause();
+  clearInterval(rec.tick);
+  await saveNow();
+  openDetail(cur, { replace: true, autoSummary: true });
+}
+$("#lStop").onclick = () => {
+  if (!cur.segs.length && !confirm("Non è stato trascritto nulla. Terminare comunque?")) return;
+  stopMeeting();
+};
+
+/* ---------- dettaglio ---------- */
+let detailTab = "sum";
+function openDetail(m, opts = {}) {
+  cur = m;
+  if (opts.replace) { history.replaceState({ v: "detail" }, ""); show("detail", false); } else show("detail");
+  $("#dTitle").value = m.titolo;
+  renderMeta();
+  $("#dInstr").value = m.istruzioni || "";
+  setTab(m.riepilogo || m.segs.length ? "sum" : "tr");
+  renderSummary();
+  renderTranscript();
+  if (opts.autoSummary && !m.riepilogo && m.segs.length && hasKey()) generate();
+}
+function renderMeta() {
+  const m = cur;
+  $("#dMeta").textContent = `${fmtDate(m.data)} · ${fmtTime(m.data)} · durata ${fmtDur(m.durata || 0, true)}${m.partecipanti.length ? " · " + m.partecipanti.join(", ") : ""}`;
+}
+$("#dTitle").addEventListener("input", () => { cur.titolo = $("#dTitle").value; saveSoon(); });
+function setTab(t) {
+  detailTab = t;
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  $("#t-sum").hidden = t !== "sum"; $("#t-tr").hidden = t !== "tr";
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.t));
+$("#dDelete").onclick = async () => {
+  if (!confirm("Eliminare questa riunione, con trascrizione e riepilogo? Non si può annullare.")) return;
+  await db.del(cur.id);
+  meetings = meetings.filter(m => m.id !== cur.id); cur = null;
+  history.back();
+};
+$("#dResume").onclick = () => { history.pushState({ v: "live" }, ""); startLive(); };
+
+/* trascrizione modificabile */
+function renderTranscript() {
+  const people = [...new Set([...cur.partecipanti, ...cur.segs.map(s => s.s).filter(Boolean)])];
+  const opts = sel => `<option value=""${sel ? "" : " selected"}>?</option>` + people.map(p => `<option${p === sel ? " selected" : ""}>${esc(p)}</option>`).join("");
+  $("#trList").innerHTML = cur.segs.length ? cur.segs.map(s => `<div class="tseg" data-id="${s.id}">
+      ${s.k === "note" ? '<b class="small">📝 Appunto</b>' : `<select aria-label="Chi parla">${opts(s.s)}</select>`}
+      <span class="tm">${fmtTm(s.t)}</span>
+      <div class="tx">${esc(s.x)}</div>
+    </div>`).join("") : '<p class="muted">Ancora nessun testo.</p>';
+  $("#trList").querySelectorAll(".tseg").forEach(row => {
+    const s = cur.segs.find(x => x.id === row.dataset.id);
+    const sel = row.querySelector("select");
+    if (sel) sel.onchange = () => { s.s = sel.value; saveSoon(); };
+    row.querySelector(".tx").onclick = () => {
+      const tx = row.querySelector(".tx");
+      const ta = document.createElement("textarea");
+      ta.value = s.x; ta.style.minHeight = "60px";
+      tx.replaceWith(ta); ta.focus();
+      ta.onblur = () => {
+        const v = ta.value.trim();
+        if (!v) { if (confirm("Eliminare questo pezzo di trascrizione?")) { cur.segs.splice(cur.segs.indexOf(s), 1); saveSoon(); renderTranscript(); return; } }
+        else s.x = v;
+        saveSoon();
+        renderTranscript();
+      };
+    };
+  });
+}
+function transcriptText(m, forAI) {
+  // unisce gli interventi consecutivi della stessa persona
+  const out = [];
+  let prev = null;
+  for (const s of m.segs) {
+    const who = s.k === "note" ? "NOTA" : (s.s || "?");
+    if (prev && prev.who === who && who !== "NOTA" && s.t - prev.end < 120000) { prev.x += " " + s.x; prev.end = s.t; continue; }
+    prev = { who, t: s.t, end: s.t, x: s.x };
+    out.push(prev);
+  }
+  return out.map(p => `[${fmtTm(p.t)}] ${p.who}: ${p.x}`).join(forAI ? "\n" : "\n\n");
+}
+$("#dDownTr").onclick = () => download(safeName(cur.titolo) + " - trascrizione.txt", `${cur.titolo}\n${fmtDate(cur.data)}\n\n` + transcriptText(cur));
+
+/* importazione testo */
+function parseImport(raw) {
+  raw = raw.replace(/\r/g, "");
+  const segs = [];
+  const isCaptions = /^WEBVTT|-->/m.test(raw);
+  if (isCaptions) {
+    let t = 0;
+    for (const block of raw.split(/\n\s*\n/)) {
+      const lines = block.split("\n").filter(l => l.trim() && !/^WEBVTT|^NOTE\b|^\d+$/.test(l.trim()));
+      let txt = [];
+      for (const l of lines) {
+        const tm = l.match(/(\d+):(\d\d):(\d\d)[.,]\d+\s*-->/) || l.match(/^(\d\d):(\d\d)[.,]\d+\s*-->/);
+        if (tm) { t = tm.length === 4 ? ((+tm[1] * 60 + +tm[2]) * 60 + +tm[3]) * 1000 : (+tm[1] * 60 + +tm[2]) * 1000; continue; }
+        txt.push(l);
+      }
+      let line = txt.join(" ").trim();
+      if (!line) continue;
+      let who = "";
+      const v = line.match(/<v\s+([^>]+)>/);
+      if (v) who = v[1].trim();
+      line = line.replace(/<[^>]+>/g, "").trim();
+      const c = !who && line.match(/^([^:]{2,40}):\s+(.+)$/);
+      if (c) { who = c[1].trim(); line = c[2]; }
+      const last = segs[segs.length - 1];
+      if (last && last.s === who && t - last.t < 60000) last.x += " " + line;
+      else segs.push({ id: uid(), t, s: who, x: line, k: "speech" });
+    }
+  } else {
+    let lastWho = "";
+    for (const para of raw.split(/\n+/)) {
+      let line = para.trim();
+      if (!line) continue;
+      let t = 0;
+      const tm = line.match(/^\[?(\d{1,2}):(\d\d)(?::(\d\d))?\]?\s*/);
+      if (tm) { t = tm[3] ? ((+tm[1] * 60 + +tm[2]) * 60 + +tm[3]) * 1000 : (+tm[1] * 60 + +tm[2]) * 60000; line = line.slice(tm[0].length); }
+      const c = line.match(/^([^:\d][^:]{0,39}):\s*(.*)$/);
+      let who = lastWho;
+      if (c && c[1].split(/\s+/).length <= 4) { who = c[1].trim(); line = c[2]; lastWho = who; }
+      if (!line) continue;
+      segs.push({ id: uid(), t: t || (segs.length ? segs[segs.length - 1].t : 0), s: who === "?" ? "" : who, x: line, k: "speech" });
+    }
+  }
+  return segs;
+}
+let importTarget = null;
+function openImport(target) {
+  importTarget = target;
+  $("#dlgTextTitle").textContent = target ? "Aggiungi testo" : "Importa testo";
+  $("#dlgTextArea").value = "";
+  $("#dlgText").showModal();
+}
+$("#importBtn").onclick = () => openImport(null);
+$("#dAddText").onclick = () => openImport(cur);
+$("#dlgTextCancel").onclick = () => $("#dlgText").close();
+$("#dlgTextFile").onchange = async e => { const f = e.target.files[0]; if (f) $("#dlgTextArea").value = await f.text(); e.target.value = ""; };
+$("#dlgTextOk").onclick = async () => {
+  const segs = parseImport($("#dlgTextArea").value);
+  if (!segs.length) { alert("Non c'è testo da importare."); return; }
+  $("#dlgText").close();
+  let m = importTarget;
+  if (!m) {
+    m = newMeeting({ titolo: "Riunione importata del " + new Date().toLocaleDateString("it-IT") });
+    meetings.unshift(m);
+  } else {
+    const base = m.segs.length ? m.segs[m.segs.length - 1].t : 0;
+    if (segs.every(s => s.t === 0)) segs.forEach(s => s.t = base);
+  }
+  m.segs.push(...segs);
+  m.durata = Math.max(m.durata || 0, segs[segs.length - 1].t);
+  segs.forEach(s => { if (s.s && !m.partecipanti.includes(s.s)) m.partecipanti.push(s.s); });
+  cur = m; await saveNow();
+  if (importTarget) { renderMeta(); renderTranscript(); } else openDetail(m);
+};
+
+/* ---------- riepilogo con Claude ---------- */
+function errText(e) {
+  const c = e && e.code;
+  if (c === "no_key") return "Serve la chiave API di Claude: inseriscila nelle Impostazioni (icona in alto a destra).";
+  if (c === "bad_key") return "La chiave API non è valida o non ha credito. Controllala nelle Impostazioni.";
+  if (c === "offline") return "Sei offline. Riprova quando hai connessione.";
+  if (c === "rate_limited") return "Troppe richieste in poco tempo. Riprova tra un minuto.";
+  if (c === "cancelled") return "Annullato.";
+  if (c === "refused") return "Claude non ha potuto completare questa richiesta.";
+  if (c === "invalid_json") return "La risposta non era nel formato atteso. Riprova.";
+  return "Qualcosa non ha funzionato: " + ((e && e.message) || "errore sconosciuto") + ". Riprova.";
+}
+
+function buildPrompt(m) {
+  const people = m.partecipanti.length ? m.partecipanti.join(", ") : "non indicati";
+  return `Sei un segretario esperto. Devi scrivere il riepilogo di una riunione partendo dalla sua trascrizione.
+
+La trascrizione è stata fatta in automatico dal riconoscimento vocale del telefono: può contenere parole sbagliate, nomi storpiati, frasi spezzate e ripetizioni. Ogni riga riporta [ore:minuti dall'inizio] e chi parla; "?" vuol dire che chi parla non è stato indicato. Le righe "NOTA" sono appunti scritti a mano durante la riunione: sono affidabili e importanti.
+
+Titolo: ${m.titolo}
+Data: ${fmtDate(m.data)}, inizio ${fmtTime(m.data)}
+Durata: ${fmtDur(m.durata || 0, true)}
+Partecipanti: ${people}
+${m.odg ? "Ordine del giorno / note iniziali:\n" + m.odg + "\n" : ""}${m.istruzioni ? "\nIndicazioni di chi chiede il riepilogo (seguile):\n" + m.istruzioni + "\n" : ""}
+<trascrizione>
+${transcriptText(m, true)}
+</trascrizione>
+
+Scrivi un riepilogo chiaro, fedele e facile da leggere, da condividere con i partecipanti e con chi non c'era.
+Regole:
+- Non inventare nulla: nessun nome, cifra, data o impegno che non risulti dalla trascrizione o dalle note.
+- Correggi in silenzio gli errori evidenti del riconoscimento vocale quando il senso è chiaro.
+- Attribuisci opinioni, decisioni e compiti a una persona solo quando è chiaro chi ha parlato; con "?" puoi dedurlo dal contesto solo se è evidente, altrimenti non indicare nessuno.
+- Raggruppa per argomento anche se la discussione è tornata più volte sullo stesso punto. Ignora chiacchiere e divagazioni.
+- Frasi brevi e concrete. Conserva cifre, importi, quantità e date esattamente come detti.
+- Se un'informazione non c'è, lascia la lista vuota: non riempirla per forza.
+- Scrivi in italiano, salvo indicazioni diverse.
+
+Rispondi solo con un oggetto JSON con questa forma:
+{
+  "titolo": "titolo breve e descrittivo della riunione",
+  "sintesi": "3-6 frasi: di cosa si è parlato e cosa si è concluso",
+  "argomenti": [ { "titolo": "argomento", "punti": ["cosa è emerso, con chi l'ha detto se chiaro"] } ],
+  "decisioni": ["decisione presa"],
+  "azioni": [ { "cosa": "compito da fare", "chi": "persona responsabile o stringa vuota", "entro": "scadenza come detta, o stringa vuota" } ],
+  "questioni_aperte": ["punto rimasto in sospeso o da approfondire"],
+  "prossimo_incontro": "data o indicazioni del prossimo incontro, o stringa vuota"
+}`;
+}
+
+let genCtl = null;
+async function generate() {
+  const m = cur;
+  if (!m.segs.length) { $("#genMsg").innerHTML = '<span class="err">Non c\'è ancora testo da riepilogare.</span>'; return; }
+  if (!hasKey()) { $("#genMsg").innerHTML = `<span class="err">${esc(errText({ code: "no_key" }))}</span>`; return; }
+  m.istruzioni = $("#dInstr").value.trim();
+  saveSoon();
+  genCtl = new AbortController();
+  $("#genBtn").disabled = true; $("#genStop").hidden = false;
+  const mins = Math.max(1, Math.round((m.durata || 0) / 60000));
+  $("#genMsg").innerHTML = `<span class="spin"></span> Claude sta leggendo ${mins > 1 ? mins + " minuti di riunione" : "la riunione"} e scrivendo il riepilogo… ${mins > 30 ? "Può volerci un paio di minuti." : ""}`;
+  try {
+    const sample = await window.claude.use("sample");
+    const r = await sample.json(buildPrompt(m), { modelTier: "complex", signal: genCtl.signal });
+    if (!r || typeof r !== "object" || !r.sintesi) throw Object.assign(new Error("formato"), { code: "invalid_json" });
+    m.riepilogo = { ...r, creato: new Date().toISOString() };
+    if (r.titolo && /^Riunione (del|importata)/.test(m.titolo)) { m.titolo = r.titolo; $("#dTitle").value = r.titolo; }
+    await saveNow();
+    $("#genMsg").textContent = "";
+    if (cur === m) { renderSummary(); setTab("sum"); }
+  } catch (e) {
+    $("#genMsg").innerHTML = `<span class="err">${esc(errText(e))}</span>`;
+  } finally {
+    genCtl = null;
+    $("#genBtn").disabled = false; $("#genStop").hidden = true;
+  }
+}
+$("#genBtn").onclick = generate;
+$("#genStop").onclick = () => genCtl && genCtl.abort();
+
+const arr = a => Array.isArray(a) ? a.filter(x => x && (typeof x !== "string" || x.trim())) : [];
+function summaryHtml(m, forPrint) {
+  const r = m.riepilogo;
+  const list = (title, items) => items.length ? `<h3>${title}</h3><ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : "";
+  const acts = arr(r.azioni);
+  return `<div class="sum">
+    <h2>${esc(m.titolo || r.titolo)}</h2>
+    <div class="small muted">${esc(fmtDate(m.data))} · durata ${fmtDur(m.durata || 0, true)}${m.partecipanti.length ? "<br>Partecipanti: " + esc(m.partecipanti.join(", ")) : ""}</div>
+    <h3>In sintesi</h3><p style="margin:4px 0">${esc(r.sintesi)}</p>
+    ${list("Decisioni prese", arr(r.decisioni))}
+    ${acts.length ? `<h3>Cose da fare</h3><div class="act">${acts.map(a => `<div>${esc(a.cosa)}${a.chi || a.entro ? `<div class="meta">${a.chi ? "👤 " + esc(a.chi) : ""}${a.chi && a.entro ? " · " : ""}${a.entro ? "📅 " + esc(a.entro) : ""}</div>` : ""}</div>`).join("")}</div>` : ""}
+    ${arr(r.argomenti).map(g => `<h3>${esc(g.titolo)}</h3><ul>${arr(g.punti).map(p => `<li>${esc(p)}</li>`).join("")}</ul>`).join("")}
+    ${list("Questioni aperte", arr(r.questioni_aperte))}
+    ${r.prossimo_incontro ? `<h3>Prossimo incontro</h3><p style="margin:4px 0">${esc(r.prossimo_incontro)}</p>` : ""}
+    ${forPrint ? "" : `<p class="small muted" style="margin-top:14px">Riepilogo preparato da Claude dalla trascrizione automatica: controlla nomi e cifre prima di inviarlo.</p>`}
+  </div>`;
+}
+function summaryText(m) {
+  const r = m.riepilogo;
+  const L = [];
+  L.push(`RIEPILOGO: ${m.titolo || r.titolo}`);
+  L.push(`${fmtDate(m.data)} · durata ${fmtDur(m.durata || 0, true)}`);
+  if (m.partecipanti.length) L.push(`Partecipanti: ${m.partecipanti.join(", ")}`);
+  L.push("", "IN SINTESI", r.sintesi);
+  const sec = (t, items) => { if (items.length) { L.push("", t); items.forEach(i => L.push("• " + i)); } };
+  sec("DECISIONI PRESE", arr(r.decisioni));
+  const acts = arr(r.azioni);
+  if (acts.length) { L.push("", "COSE DA FARE"); acts.forEach(a => L.push(`• ${a.cosa}${a.chi ? " — " + a.chi : ""}${a.entro ? " (entro " + a.entro.replace(/^entro\s+/i, "") + ")" : ""}`)); }
+  arr(r.argomenti).forEach(g => sec(String(g.titolo || "").toUpperCase(), arr(g.punti)));
+  sec("QUESTIONI APERTE", arr(r.questioni_aperte));
+  if (r.prossimo_incontro) L.push("", "PROSSIMO INCONTRO", r.prossimo_incontro);
+  return L.join("\n");
+}
+function renderSummary() {
+  const m = cur, box = $("#sumBox");
+  $("#genBtn").textContent = m.riepilogo ? "Rifai il riepilogo" : "Crea il riepilogo";
+  if (!m.riepilogo) {
+    box.innerHTML = m.segs.length ? "" : '<div class="card muted">Questa riunione non ha ancora testo. Vai su <b>Trascrizione</b> per registrare o aggiungere testo.</div>';
+    return;
+  }
+  box.innerHTML = `<div class="card">${summaryHtml(m)}
+    <div class="share">
+      <button type="button" class="primary" id="shShare">Condividi</button>
+      <button type="button" id="shCopy">Copia</button>
+      <button type="button" id="shMail">Email</button>
+      <button type="button" id="shPdf">PDF / Stampa</button>
+      <button type="button" id="shTxt">Scarica testo</button>
+    </div><div id="shMsg" class="small okc" style="margin-top:6px"></div></div>`;
+  const text = () => summaryText(cur);
+  const copy = async () => { try { await navigator.clipboard.writeText(text()); $("#shMsg").textContent = "Copiato: ora puoi incollarlo dove vuoi."; } catch (e) { $("#shMsg").textContent = "Non riesco a copiare: usa Scarica testo."; } };
+  $("#shCopy").onclick = copy;
+  $("#shShare").onclick = async () => {
+    if (navigator.share) { try { await navigator.share({ title: "Riepilogo: " + cur.titolo, text: text() }); } catch (e) {} }
+    else copy();
+  };
+  $("#shMail").onclick = () => { location.href = `mailto:?subject=${encodeURIComponent("Riepilogo riunione: " + cur.titolo)}&body=${encodeURIComponent(text())}`; };
+  $("#shTxt").onclick = () => download(safeName(cur.titolo) + " - riepilogo.txt", text());
+  $("#shPdf").onclick = () => {
+    $("#printArea").innerHTML = summaryHtml(cur, true);
+    const t = document.title; document.title = safeName(cur.titolo) + " - riepilogo";
+    window.print();
+    document.title = t;
+  };
+}
+
+/* ---------- impostazioni ---------- */
+function renderSettings() {
+  const sel = $("#aiModel");
+  if (!sel.options.length && window.claudeModels) sel.innerHTML = claudeModels.map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join("");
+  if (window.claudeSettings) { $("#apiKey").value = claudeSettings.apiKey; sel.value = claudeSettings.model; }
+  $("#apiMsg").textContent = "";
+}
+$("#apiKeyShow").onclick = () => { const i = $("#apiKey"); i.type = i.type === "password" ? "text" : "password"; $("#apiKeyShow").textContent = i.type === "password" ? "Mostra" : "Nascondi"; };
+$("#apiSave").onclick = async () => {
+  const msg = $("#apiMsg");
+  if (!window.claudeSettings) { msg.innerHTML = '<span class="err">Il collegamento a Claude non si è caricato. Controlla la connessione e riapri l\'app.</span>'; return; }
+  claudeSettings.apiKey = $("#apiKey").value; claudeSettings.model = $("#aiModel").value;
+  if (!claudeSettings.apiKey) { msg.innerHTML = '<span class="err">Incolla la chiave API, inizia con sk-ant-.</span>'; return; }
+  msg.innerHTML = '<span class="spin"></span> Provo la chiave…';
+  try { const s = await window.claude.use("sample"); await s.test(); msg.innerHTML = '<span class="okc">Funziona. Chiave salvata.</span>'; }
+  catch (e) { msg.innerHTML = `<span class="err">${esc(errText(e))}</span>`; }
+};
+$("#backupSave").onclick = async () => {
+  const all = await db.all();
+  download(`riunioni-copia-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: "riunioni", versione: 1, riunioni: all }), "application/json");
+  $("#backupMsg").textContent = `Copia salvata (${all.length} riunioni).`;
+};
+$("#backupFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const list = (data.riunioni || []).filter(m => m && m.id && Array.isArray(m.segs));
+    for (const m of list) await db.put(m);
+    await load();
+    $("#backupMsg").textContent = `Ripristinate ${list.length} riunioni.`;
+  } catch (err) { $("#backupMsg").innerHTML = '<span class="err">Il file non è una copia valida.</span>'; }
+};
+
+/* ---------- avvio ---------- */
+(async () => {
+  await load();
+  history.replaceState({ v: "home" }, "");
+  show("home", false);
+  if (location.hash === "#nuova") { history.replaceState({ v: "home" }, "", location.pathname); $("#newBtn").click(); }
+})();
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {}));
+</script>
+</body>
+</html>
