@@ -1,0 +1,7 @@
+node_modules/
+app/dist/
+functions/lib/
+.dati-emulatori/
+.archivio-simulato/
+*.local
+*-debug.log

@@ -1,0 +1,10 @@
+rules_version = '2';
+
+// Passo 1: tutto chiuso. Le regole vere arrivano al passo 2.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
