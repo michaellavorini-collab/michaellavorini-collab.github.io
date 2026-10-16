@@ -12,3 +12,5 @@ export const salute = onCall(() => ({
 }));
 
 export { creaDitta } from "./accesso/creaDitta";
+export { creaOperatore, nuovoCodiceOperatore, impostaOperatoreAttivo } from "./accesso/operatori";
+export { accessoOperatore } from "./accesso/accessoOperatore";

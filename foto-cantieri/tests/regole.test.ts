@@ -162,10 +162,12 @@ describe('titolare', () => {
     await assertFails(deleteDoc(doc(titolareA(), 'ditte/dittaA/commesse/c1')))
   })
 
-  it('vede tutti gli operatori, li disattiva, ma non li crea dal client', async () => {
+  it('vede tutti gli operatori e li rinomina, ma non li crea né li disattiva dal client', async () => {
     const db = titolareA()
     await assertSucceeds(getDocs(collection(db, 'ditte/dittaA/operatori')))
-    await assertSucceeds(updateDoc(doc(db, 'ditte/dittaA/operatori/mario'), { attivo: false, aggiornatoIl: serverTimestamp() }))
+    await assertSucceeds(updateDoc(doc(db, 'ditte/dittaA/operatori/mario'), { nome: 'Mario R.', aggiornatoIl: serverTimestamp() }))
+    // Disattivare passa dalla Function, che revoca anche le sessioni.
+    await assertFails(updateDoc(doc(db, 'ditte/dittaA/operatori/mario'), { attivo: false, aggiornatoIl: serverTimestamp() }))
     await assertFails(setDoc(doc(db, 'ditte/dittaA/operatori/nuovo'), {
       nome: 'Nuovo', attivo: true, creatoIl: serverTimestamp(), aggiornatoIl: serverTimestamp(),
     }))
@@ -223,10 +225,10 @@ describe('operatore disattivato', () => {
     await assertFails(getDoc(doc(db, 'ditte/dittaA/operatori/luigi')))
   })
 
-  it('viene bloccato subito quando il titolare lo disattiva, col token ancora valido', async () => {
+  it('viene bloccato subito quando viene disattivato, col token ancora valido', async () => {
     const db = operatore('mario')
     await assertSucceeds(getDocs(collection(db, 'ditte/dittaA/foto')))
-    await updateDoc(doc(titolareA(), 'ditte/dittaA/operatori/mario'), { attivo: false, aggiornatoIl: serverTimestamp() })
+    await amb.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), 'ditte/dittaA/operatori/mario'), { attivo: false }))
     await assertFails(getDocs(collection(db, 'ditte/dittaA/foto')))
   })
 

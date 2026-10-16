@@ -46,6 +46,35 @@ per quelle prove servirà un tunnel HTTPS (lo prepariamo al passo 6).
 La Function `creaDitta` accetta solo utenti entrati con Google, crea una sola ditta per titolare
 (richiamarla restituisce quella esistente) e assegna al token `dittaId` e `ruolo`.
 
+## Operatori (passo 4)
+
+Il titolare, nella scheda **Operatori**, aggiunge un operatore: compare il suo codice personale
+di 5 cifre **una sola volta** (si salva solo un'impronta HMAC con un segreto, non il codice).
+Da lì può generare un **nuovo codice** (il vecchio smette subito di valere) e **disattivare/riattivare**.
+
+L'operatore entra dalla pagina iniziale con **codice ditta + codice personale**. La Function
+`accessoOperatore` verifica i codici e restituisce un token Firebase con `dittaId`, `ruolo: "operatore"`
+e `operatoreId`.
+
+- Codici sbagliati: stesso messaggio sia per ditta che per codice personale (non si rivela quale).
+- Dopo 5 errori dallo stesso dispositivo sulla stessa ditta, blocco di 15 minuti
+  (e oltre 50 errori sulla ditta da qualunque dispositivo). L'IP si salva solo come impronta.
+- **Disattivazione immediata**: regole Firestore e Functions controllano `attivo` a ogni richiesta;
+  la Function `impostaOperatoreAttivo` chiude anche le sessioni (il token non si rinnova).
+  L'operatore che ha l'app aperta viene riportato alla pagina di accesso con un avviso.
+
+Per provarlo servono due finestre (per esempio una normale e una in incognito):
+1. titolare: scheda **Operatori** → aggiungi "Mario" e annota il codice; scheda **Commesse** → aggiungi una commessa;
+2. operatore: codice ditta + codice di Mario → vede le commesse attive;
+3. titolare: **Disattiva** Mario → nella finestra dell'operatore compare "accesso disattivato";
+4. operatore: prova 5 volte un codice sbagliato → al sesto tentativo "Troppi tentativi".
+
+### Segreti locali
+
+`npm run setup` (e ogni avvio di emulatori o test) crea `functions/.secret.local` con valori casuali
+per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO`. Il file non va su git.
+Se lo cancelli, i codici operatore già creati smettono di funzionare: rigenerali dalla scheda Operatori.
+
 ## Struttura
 
 ```
@@ -60,16 +89,20 @@ foto-cantieri/
 │       ├── firebase.ts     inizializzazione e collegamento agli emulatori
 │       ├── sessione.tsx    utente collegato, ditta e ruolo dal token
 │       ├── App.tsx         sceglie la pagina in base alla sessione
-│       └── pagine/         Accesso, CreaDitta, HomeTitolare
+│       └── pagine/         Accesso, CreaDitta, HomeTitolare (+ SezioneOperatori,
+│                           SezioneCommesse), HomeOperatore
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
 │   └── src/
 │       ├── index.ts        elenco delle Functions
 │       ├── comune.ts       accesso a Firestore/Auth, errori in italiano
-│       └── accesso/        creaDitta
+│       └── accesso/        creaDitta, operatori, accessoOperatore,
+│                           codiciOperatore (impronte), tentativi (blocco errori)
+├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
     ├── regole.test.ts      regole di sicurezza Firestore
-    └── creaDitta.test.ts   creazione della ditta da parte del titolare
+    ├── creaDitta.test.ts   creazione della ditta da parte del titolare
+    └── operatori.test.ts   codici operatore, accesso, blocchi, disattivazione
 ```
 
 ## Modello dati
@@ -77,7 +110,7 @@ foto-cantieri/
 | Percorso | Contenuto | Chi scrive |
 |---|---|---|
 | `ditte/{dittaId}` | nome, codice ditta, titolare, sottocartelle, stato dell'archivio | Function `creaDitta`; il titolare cambia solo nome e sottocartelle |
-| `ditte/{dittaId}/operatori/{id}` | nome, attivo | Function (creazione e codice); il titolare rinomina e attiva/disattiva |
+| `ditte/{dittaId}/operatori/{id}` | nome, attivo | Function (creazione, codice, attiva/disattiva); il titolare rinomina |
 | `ditte/{dittaId}/commesse/{id}` | numero, descrizione, cliente, attiva | titolare (non si cancellano: si disattivano) |
 | `ditte/{dittaId}/foto/{id}` | indice: id file e cartella nell'archivio, commessa, sottocartella, chi, quando | solo Function, dopo aver verificato il file |
 | `titolari/{uid}` | la ditta del titolare (impedisce doppioni) | solo Functions |

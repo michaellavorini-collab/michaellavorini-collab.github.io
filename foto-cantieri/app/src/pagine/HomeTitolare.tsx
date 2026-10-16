@@ -4,12 +4,17 @@ import type { Ditta } from '../../../shared/modello'
 import { db } from '../firebase'
 import { messaggioErrore } from '../errori'
 import { useSessione } from '../sessione'
-import { Caricamento, Errore, Pagina } from '../componenti'
+import { Caricamento, Errore, Pagina, Schede } from '../componenti'
+import SezioneOperatori from './SezioneOperatori'
+import SezioneCommesse from './SezioneCommesse'
+
+type Sezione = 'ditta' | 'operatori' | 'commesse'
 
 export default function HomeTitolare() {
   const sessione = useSessione()
   const [ditta, setDitta] = useState<Ditta | null>(null)
   const [errore, setErrore] = useState<string | null>(null)
+  const [sezione, setSezione] = useState<Sezione>('ditta')
 
   useEffect(
     () =>
@@ -26,27 +31,38 @@ export default function HomeTitolare() {
 
   return (
     <Pagina titolo={ditta.nome}>
-      <section className="scheda">
-        <p>Codice ditta da dare agli operatori:</p>
-        <p className="codice-grande" aria-label={`Codice ditta ${[...ditta.codiceDitta].join(' ')}`}>
-          {ditta.codiceDitta}
-        </p>
-      </section>
+      <Schede
+        voci={[
+          { id: 'ditta', etichetta: 'Ditta' },
+          { id: 'operatori', etichetta: 'Operatori' },
+          { id: 'commesse', etichetta: 'Commesse' },
+        ]}
+        attiva={sezione}
+        onCambia={setSezione}
+      />
 
-      <section className="scheda">
-        <h2>Google Drive</h2>
-        <p>{ditta.archivio.stato === 'collegato' ? `Collegato: ${ditta.archivio.account ?? ''}` : 'Non ancora collegato.'}</p>
-        <button className="pulsante" disabled>Collega Google Drive (in arrivo)</button>
-      </section>
+      {sezione === 'ditta' && (
+        <>
+          <section className="scheda">
+            <p>Codice ditta da dare agli operatori:</p>
+            <p className="codice-grande" aria-label={`Codice ditta ${[...ditta.codiceDitta].join(' ')}`}>
+              {ditta.codiceDitta}
+            </p>
+          </section>
 
-      <section className="scheda">
-        <h2>Operatori e commesse</h2>
-        <p>In arrivo nei prossimi passi.</p>
-      </section>
+          <section className="scheda">
+            <h2>Google Drive</h2>
+            <p>{ditta.archivio.stato === 'collegato' ? `Collegato: ${ditta.archivio.account ?? ''}` : 'Non ancora collegato.'}</p>
+            <button className="pulsante" disabled>Collega Google Drive (in arrivo)</button>
+          </section>
 
-      <button className="pulsante testo" onClick={sessione.esci}>
-        Esci ({sessione.utente?.email})
-      </button>
+          <button className="pulsante testo" onClick={() => sessione.esci()}>
+            Esci ({sessione.utente?.email})
+          </button>
+        </>
+      )}
+      {sezione === 'operatori' && <SezioneOperatori dittaId={sessione.dittaId!} />}
+      {sezione === 'commesse' && <SezioneCommesse dittaId={sessione.dittaId!} />}
     </Pagina>
   )
 }

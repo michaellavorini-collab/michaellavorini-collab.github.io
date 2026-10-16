@@ -1,17 +1,56 @@
-import { useState } from 'react'
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth'
+import { useState, type FormEvent } from 'react'
+import { GoogleAuthProvider, signInWithCustomToken, signInWithPopup, signInWithRedirect } from 'firebase/auth'
 import { FirebaseError } from 'firebase/app'
-import { auth } from '../firebase'
+import { httpsCallable } from 'firebase/functions'
+import { LUNGHEZZA_CODICE_DITTA, normalizzaCodiceDitta } from '../../../shared/modello'
+import { auth, functions } from '../firebase'
 import { messaggioErrore } from '../errori'
+import { useSessione } from '../sessione'
 import { Errore, Pagina } from '../componenti'
 
-export default function Accesso() {
-  const [errore, setErrore] = useState<string | null>(null)
-  const [attesa, setAttesa] = useState(false)
+const CHIAVE_CODICE_DITTA = 'fotoCantieri.codiceDitta'
 
-  async function accediConGoogle() {
+function leggiCodiceDitta(): string {
+  try {
+    return localStorage.getItem(CHIAVE_CODICE_DITTA) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export default function Accesso() {
+  const { avviso } = useSessione()
+  const [codiceDitta, setCodiceDitta] = useState(leggiCodiceDitta)
+  const [codicePersonale, setCodicePersonale] = useState('')
+  const [errore, setErrore] = useState<string | null>(avviso)
+  const [attesa, setAttesa] = useState<'operatore' | 'titolare' | null>(null)
+
+  async function entraOperatore(e: FormEvent) {
+    e.preventDefault()
     setErrore(null)
-    setAttesa(true)
+    setAttesa('operatore')
+    try {
+      const codice = normalizzaCodiceDitta(codiceDitta)
+      const { data } = await httpsCallable<unknown, { token: string }>(functions, 'accessoOperatore')({
+        codiceDitta: codice,
+        codicePersonale,
+      })
+      try {
+        localStorage.setItem(CHIAVE_CODICE_DITTA, codice)
+      } catch {
+        // Memoria del browser non disponibile: pazienza, lo si riscrive la prossima volta.
+      }
+      await signInWithCustomToken(auth, data.token)
+    } catch (err) {
+      setErrore(messaggioErrore(err))
+      setCodicePersonale('')
+      setAttesa(null)
+    }
+  }
+
+  async function entraTitolare() {
+    setErrore(null)
+    setAttesa('titolare')
     const provider = new GoogleAuthProvider()
     provider.setCustomParameters({ prompt: 'select_account' })
     try {
@@ -23,28 +62,55 @@ export default function Accesso() {
         return
       }
       setErrore(messaggioErrore(e))
-    } finally {
-      setAttesa(false)
+      setAttesa(null)
     }
   }
 
   return (
     <Pagina>
-      <section className="scheda">
-        <h2>Sei un operatore?</h2>
-        <p>Entra con il codice della ditta e il tuo codice personale.</p>
-        <button className="pulsante" disabled>
-          Accesso operatore (in arrivo)
+      <form className="scheda" onSubmit={entraOperatore}>
+        <h2>Accesso operatore</h2>
+        <label className="campo">
+          Codice ditta
+          <input
+            value={codiceDitta}
+            onChange={(e) => setCodiceDitta(e.target.value.toUpperCase())}
+            maxLength={LUNGHEZZA_CODICE_DITTA + 2}
+            autoCapitalize="characters"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="input-codice"
+            placeholder="Es. YBTS4T"
+            required
+          />
+        </label>
+        <label className="campo">
+          Codice personale
+          <input
+            value={codicePersonale}
+            onChange={(e) => setCodicePersonale(e.target.value.replace(/\D/g, ''))}
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            autoComplete="current-password"
+            className="input-codice"
+            required
+          />
+        </label>
+        <button className="pulsante" disabled={attesa !== null || !codiceDitta.trim() || codicePersonale.length < 4}>
+          {attesa === 'operatore' ? 'Accesso in corso…' : 'Entra'}
         </button>
-      </section>
+        <Errore testo={errore} />
+      </form>
 
       <section className="scheda">
         <h2>Sei il titolare?</h2>
         <p>Entra con il tuo account Google per creare o gestire la tua ditta.</p>
-        <button className="pulsante secondario" onClick={accediConGoogle} disabled={attesa}>
-          {attesa ? 'Accesso in corso…' : 'Entra con Google'}
+        <button className="pulsante secondario" onClick={entraTitolare} disabled={attesa !== null}>
+          {attesa === 'titolare' ? 'Accesso in corso…' : 'Entra con Google'}
         </button>
-        <Errore testo={errore} />
       </section>
     </Pagina>
   )

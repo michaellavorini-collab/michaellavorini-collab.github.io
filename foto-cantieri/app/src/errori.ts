@@ -14,7 +14,8 @@ export function messaggioErrore(e: unknown): string {
   if (e instanceof FirebaseError) {
     if (MESSAGGI[e.code]) return MESSAGGI[e.code]
     // Gli errori delle nostre Functions hanno già il messaggio in italiano.
-    if (e.code.startsWith('functions/') && e.message) return e.message
+    // (l'SDK aggiunge in fondo lo stato HTTP, es. " [403]": all'utente non serve).
+    if (e.code.startsWith('functions/') && e.message) return e.message.replace(/\s*\[\d+\]$/, '')
   }
   return 'Qualcosa è andato storto. Riprova.'
 }

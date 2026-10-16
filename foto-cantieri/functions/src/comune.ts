@@ -39,3 +39,18 @@ export function testoObbligatorio(valore: unknown, nomeCampo: string, massimo: n
   }
   return t;
 }
+
+/** Il chiamante deve essere il titolare di una ditta: restituisce il dittaId. */
+export function richiediTitolare(req: CallableRequest): string {
+  richiediLogin(req);
+  const { ruolo, dittaId } = attributi(req);
+  if (ruolo !== "titolare" || !dittaId) {
+    throw errore("permission-denied", "Solo il titolare può fare questa operazione.");
+  }
+  return dittaId;
+}
+
+/** Uid Firebase dell'operatore: stabile, così si possono revocare le sue sessioni. */
+export function uidOperatore(dittaId: string, operatoreId: string): string {
+  return `op_${dittaId}_${operatoreId}`;
+}

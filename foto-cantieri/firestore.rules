@@ -61,11 +61,11 @@ service cloud.firestore {
           || (operatoreAttivo(dittaId) && attributi().operatoreId == operatoreId);
         // Creazione e codice personale passano dalle Functions (il codice va protetto).
         allow create, delete: if false;
-        // Il titolare può rinominare e attivare/disattivare.
+        // Il titolare può rinominare. Attivare/disattivare passa dalla Function
+        // "impostaOperatoreAttivo", che chiude anche le sessioni dell'operatore.
         allow update: if titolare(dittaId)
-          && cambiaSolo(['nome', 'attivo', 'aggiornatoIl'])
+          && cambiaSolo(['nome', 'aggiornatoIl'])
           && testo(request.resource.data.nome, 1, 60)
-          && request.resource.data.attivo is bool
           && request.resource.data.aggiornatoIl == request.time;
       }
 

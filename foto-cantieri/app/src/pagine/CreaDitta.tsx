@@ -48,7 +48,7 @@ export default function CreaDitta() {
         </button>
         <Errore testo={errore} />
       </form>
-      <button className="pulsante testo" onClick={sessione.esci}>
+      <button className="pulsante testo" onClick={() => sessione.esci()}>
         Esci ({sessione.utente?.email})
       </button>
     </Pagina>

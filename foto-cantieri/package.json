@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup": "npm install && npm --prefix app install && npm --prefix functions install",
-    "build:functions": "npm --prefix functions run build",
+    "setup": "npm install && npm --prefix app install && npm --prefix functions install && node scripts/prepara-segreti.mjs",
+    "build:functions": "node scripts/prepara-segreti.mjs && npm --prefix functions run build",
     "emulatori": "npm run build:functions && firebase emulators:start --project demo-foto-cantieri --import=./.dati-emulatori --export-on-exit=./.dati-emulatori",
     "app": "npm --prefix app run dev",
     "test": "npm run build:functions && firebase emulators:exec --project demo-foto-cantieri --only auth,firestore,functions \"vitest run\""
