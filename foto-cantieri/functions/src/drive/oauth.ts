@@ -7,6 +7,7 @@ export const URL_GOOGLE = {
   token: "https://oauth2.googleapis.com/token",
   revoca: "https://oauth2.googleapis.com/revoke",
   drive: "https://www.googleapis.com/drive/v3",
+  upload: "https://www.googleapis.com/upload/drive/v3",
 };
 
 export interface ConfigOAuth {

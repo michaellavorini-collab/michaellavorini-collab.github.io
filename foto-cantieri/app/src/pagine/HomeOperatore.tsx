@@ -5,6 +5,7 @@ import { db } from '../firebase'
 import { messaggioErrore } from '../errori'
 import { useSessione } from '../sessione'
 import { Caricamento, Errore, Pagina } from '../componenti'
+import PaginaScatto from './PaginaScatto'
 
 const DISATTIVATO = 'Il tuo accesso è stato disattivato. Rivolgiti al titolare.'
 
@@ -15,6 +16,7 @@ export default function HomeOperatore() {
   const [ditta, setDitta] = useState<Ditta | null>(null)
   const [commesse, setCommesse] = useState<(Commessa & { id: string })[] | null>(null)
   const [errore, setErrore] = useState<string | null>(null)
+  const [sceltaId, setSceltaId] = useState<string | null>(null)
 
   useEffect(() => {
     // Se il titolare lo disattiva, le regole rifiutano subito le letture: si esce.
@@ -39,6 +41,9 @@ export default function HomeOperatore() {
   if (errore) return <Pagina><Errore testo={errore} /></Pagina>
   if (!operatore || !ditta || !commesse) return <Pagina><Caricamento /></Pagina>
 
+  const scelta = commesse.find((c) => c.id === sceltaId)
+  if (scelta) return <PaginaScatto commessa={scelta} ditta={ditta} indietro={() => setSceltaId(null)} />
+
   return (
     <Pagina titolo={`Ciao ${operatore.nome}`}>
       <p className="sottotitolo">{ditta.nome}</p>
@@ -48,8 +53,7 @@ export default function HomeOperatore() {
         <ul className="elenco">
           {commesse.map((c) => (
             <li key={c.id}>
-              {/* Al passo 6 qui si aprirà la fotocamera. */}
-              <button className="voce" disabled>
+              <button className="voce" onClick={() => setSceltaId(c.id)}>
                 <strong>{c.numero}</strong> {c.descrizione}
                 {c.cliente && <span className="tenue">{c.cliente}</span>}
               </button>

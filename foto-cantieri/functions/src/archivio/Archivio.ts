@@ -5,7 +5,8 @@ import type { TipoArchivio } from "../../../shared/modello";
  * Il resto dell'app usa solo questa interfaccia e non sa quale implementazione c'è sotto.
  * Le foto stanno nell'archivio; nel nostro database finiscono solo gli id.
  *
- * (Ai passi 6 e 7 si aggiungono caricamento, verifica dei file e miniature.)
+ * I byte delle foto non passano dalle Functions: il telefono li carica direttamente
+ * all'indirizzo restituito da apriCaricamento.
  */
 export interface Archivio {
   readonly tipo: TipoArchivio;
@@ -21,6 +22,32 @@ export interface Archivio {
 
   /** Vero se la cartella esiste ancora e non è nel cestino. */
   cartellaEsiste(cartellaId: string): Promise<boolean>;
+
+  /**
+   * Apre una sessione di caricamento "resumable": restituisce l'indirizzo a cui il telefono
+   * invia i byte con una PUT. "origine" è l'indirizzo dell'app (serve al CORS del browser).
+   * La risposta della PUT è JSON con { id } del file creato.
+   */
+  apriCaricamento(richiesta: RichiestaCaricamento): Promise<{ urlCaricamento: string }>;
+
+  /** Informazioni su un file creato dall'app, o null se non esiste / è nel cestino. */
+  infoFile(fileId: string): Promise<InfoFile | null>;
+}
+
+export interface RichiestaCaricamento {
+  cartellaId: string;
+  nomeFile: string;
+  mimeType: string;
+  dimensione: number;
+  origine: string;
+}
+
+export interface InfoFile {
+  id: string;
+  nome: string;
+  mimeType: string;
+  dimensione: number;
+  cartelle: string[];
 }
 
 /** L'archivio non è più raggiungibile (permesso revocato, token scaduto): va ricollegato. */

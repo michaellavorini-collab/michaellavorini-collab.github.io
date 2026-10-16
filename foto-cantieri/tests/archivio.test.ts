@@ -139,6 +139,43 @@ describe('GoogleDriveArchivio', () => {
     expect(await new GoogleDriveArchivio(config, 'rt').account()).toBe('titolare@gmail.com')
   })
 
+  it('apre il caricamento resumable passando Origin e dimensione, e restituisce l\'indirizzo', async () => {
+    const chiamate = fintoGoogle({
+      'POST https://www.googleapis.com/upload/drive/v3/files?': () =>
+        new Response('', { status: 200, headers: { Location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=XYZ' } }),
+    })
+    const r = await new GoogleDriveArchivio(config, 'rt', accesso).apriCaricamento({
+      cartellaId: 'cart1', nomeFile: 'f.jpg', mimeType: 'image/jpeg', dimensione: 123456, origine: 'https://app.esempio.it',
+    })
+    expect(r.urlCaricamento).toBe('https://www.googleapis.com/upload/drive/v3/files?upload_id=XYZ')
+    const { url, init } = chiamate[0]
+    expect(new URL(url).searchParams.get('uploadType')).toBe('resumable')
+    const h = init!.headers as Record<string, string>
+    expect(h.Origin).toBe('https://app.esempio.it')
+    expect(h['X-Upload-Content-Type']).toBe('image/jpeg')
+    expect(h['X-Upload-Content-Length']).toBe('123456')
+    expect(JSON.parse(String(init!.body))).toEqual({ name: 'f.jpg', parents: ['cart1'], mimeType: 'image/jpeg' })
+  })
+
+  it('caricamento: token non più valido = archivio scollegato', async () => {
+    fintoGoogle({ 'POST https://www.googleapis.com/upload/drive/v3/files?': () => new Response('', { status: 401 }) })
+    await expect(new GoogleDriveArchivio(config, 'rt', accesso).apriCaricamento({
+      cartellaId: 'c', nomeFile: 'f.jpg', mimeType: 'image/jpeg', dimensione: 1, origine: 'https://a.it',
+    })).rejects.toBeInstanceOf(ArchivioScollegato)
+  })
+
+  it('legge le informazioni del file; nel cestino o inesistente = null', async () => {
+    fintoGoogle({
+      'GET https://www.googleapis.com/drive/v3/files/f1?': json({ id: 'f1', name: 'a.jpg', mimeType: 'image/jpeg', size: '5000', parents: ['cart1'] }),
+      'GET https://www.googleapis.com/drive/v3/files/f2?': json({ id: 'f2', name: 'b.jpg', mimeType: 'image/jpeg', size: '1', trashed: true }),
+      'GET https://www.googleapis.com/drive/v3/files/f3?': json({ error: 'notFound' }, 404),
+    })
+    const a = new GoogleDriveArchivio(config, 'rt', accesso)
+    expect(await a.infoFile('f1')).toEqual({ id: 'f1', nome: 'a.jpg', mimeType: 'image/jpeg', dimensione: 5000, cartelle: ['cart1'] })
+    expect(await a.infoFile('f2')).toBeNull()
+    expect(await a.infoFile('f3')).toBeNull()
+  })
+
   it('protegge le ricerche dagli apici', () => {
     expect(testoPerRicerca("a'b\\c")).toBe("a\\'b\\\\c")
   })

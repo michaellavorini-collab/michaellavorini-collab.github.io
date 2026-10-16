@@ -54,3 +54,39 @@ export function richiediTitolare(req: CallableRequest): string {
 export function uidOperatore(dittaId: string, operatoreId: string): string {
   return `op_${dittaId}_${operatoreId}`;
 }
+
+export interface Membro {
+  dittaId: string;
+  ruolo: "titolare" | "operatore";
+  operatoreId?: string;
+  /** Nome da mostrare come autore delle foto. */
+  autore: string;
+}
+
+/**
+ * Il chiamante deve appartenere alla ditta: titolare, oppure operatore ancora attivo
+ * (controllato a ogni chiamata, come nelle regole Firestore).
+ */
+export async function richiediMembro(req: CallableRequest): Promise<Membro> {
+  const utente = richiediLogin(req);
+  const { ruolo, dittaId, operatoreId } = attributi(req);
+  if (ruolo === "titolare" && dittaId) {
+    return { dittaId, ruolo, autore: String(utente.token.name ?? utente.token.email ?? "Titolare") };
+  }
+  if (ruolo === "operatore" && dittaId && operatoreId) {
+    const op = await db().doc(`ditte/${dittaId}/operatori/${operatoreId}`).get();
+    if (op.get("attivo") !== true) {
+      throw errore("permission-denied", "Il tuo accesso è stato disattivato. Rivolgiti al titolare.");
+    }
+    return { dittaId, ruolo, operatoreId, autore: String(op.get("nome")) };
+  }
+  throw errore("permission-denied", "Non fai parte di una ditta.");
+}
+
+/** Id di documento passato dal client: solo lettere, cifre, - e _. */
+export function idValido(valore: unknown, cosa: string): string {
+  if (typeof valore !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(valore)) {
+    throw errore("invalid-argument", `${cosa} non valido.`);
+  }
+  return valore;
+}

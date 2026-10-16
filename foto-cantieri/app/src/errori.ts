@@ -9,8 +9,17 @@ const MESSAGGI: Record<string, string> = {
   'permission-denied': 'Non hai i permessi per questa operazione.',
 }
 
+/** Errore con un messaggio già pensato per l'utente. */
+export class ErroreUtente extends Error {
+  constructor(messaggio: string) {
+    super(messaggio)
+    this.name = 'ErroreUtente'
+  }
+}
+
 /** Messaggio in italiano da mostrare all'utente. */
 export function messaggioErrore(e: unknown): string {
+  if (e instanceof ErroreUtente) return e.message
   if (e instanceof FirebaseError) {
     if (MESSAGGI[e.code]) return MESSAGGI[e.code]
     // Gli errori delle nostre Functions hanno già il messaggio in italiano.

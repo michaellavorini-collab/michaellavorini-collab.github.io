@@ -95,6 +95,27 @@ export async function chiudiClient() {
   await Promise.all(app_aperte.splice(0).map((a) => deleteApp(a)))
 }
 
+export const ORIGINE_APP = 'http://localhost:5173'
+
+/**
+ * Chiama una Function "callable" con l'header Origin dell'app, come fa il browser
+ * (l'SDK in Node non lo manda). Lancia un errore con code "functions/..." come l'SDK.
+ */
+export async function chiamaDalBrowser<T = unknown>(c: Client | null, nome: string, dati: unknown, origine = ORIGINE_APP): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Origin: origine }
+  if (c?.auth.currentUser) headers.Authorization = `Bearer ${await c.auth.currentUser.getIdToken()}`
+  const r = await fetch(`http://${HOST}:5001/${PROGETTO}/europe-west1/${nome}`, {
+    method: 'POST', headers, body: JSON.stringify({ data: dati ?? null }),
+  })
+  const corpo = (await r.json()) as { result?: T; error?: { status: string; message: string } }
+  if (corpo.error) {
+    throw Object.assign(new Error(corpo.error.message), {
+      code: `functions/${corpo.error.status.toLowerCase().replace(/_/g, '-')}`,
+    })
+  }
+  return corpo.result as T
+}
+
 /** Si aspetta che la promessa fallisca con il codice indicato (es. "functions/permission-denied"). */
 export async function erroreDi(p: Promise<unknown>): Promise<{ code: string; message: string }> {
   try {

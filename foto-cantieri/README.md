@@ -72,7 +72,7 @@ Per provarlo servono due finestre (per esempio una normale e una in incognito):
 ### Segreti locali
 
 `npm run setup` (e ogni avvio di emulatori o test) crea `functions/.secret.local` con valori casuali
-per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO` (più la riga vuota `GOOGLE_CLIENT_SECRET=`
+per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO` (più la riga `GOOGLE_CLIENT_SECRET=da-compilare`
 da compilare a mano, vedi passo 5). Il file non va su git.
 Se lo cancelli, i codici operatore già creati smettono di funzionare: rigenerali dalla scheda Operatori.
 
@@ -110,6 +110,33 @@ In sviluppo la scheda Ditta mostra **Usa archivio di prova**: le "cartelle" dive
 sul tuo computer in `foto-cantieri/.archivio-simulato/<dittaId>/Foto Cantieri/` (esclusa da git).
 Funziona solo con gli emulatori: in produzione la Function lo rifiuta.
 
+## Caricamento delle foto (passo 6)
+
+L'operatore sceglie la commessa, la cartella (Prima / Durante / Dopo / Varie) e preme **Scatta foto**
+(o **Scegli dalla galleria**, anche più foto insieme). Per ogni foto:
+
+1. **Sul telefono**: riduzione a 1600 px sul lato lungo, JPEG qualità 0,82, orientamento corretto.
+   Il ridisegno toglie i dati EXIF, compresa la posizione GPS.
+2. `apriCaricamento` controlla operatore attivo, commessa attiva e cartella, crea se servono
+   `Foto Cantieri / <numero - descrizione> / <cartella>` e apre una sessione **resumable** su Drive
+   passando l'header **Origin** dell'app. Restituisce l'indirizzo di caricamento.
+3. Il telefono manda i byte con una **PUT direttamente a Drive**: non passano dai nostri server.
+4. `registraFoto` verifica su Drive che il file esista, nella cartella giusta e con la dimensione attesa,
+   e scrive la voce in `ditte/{dittaId}/foto`. Si può ripetere senza creare doppioni.
+
+Se la connessione cade compare **Riprova**: si riparte dall'ultimo passo riuscito
+(se la foto era già arrivata su Drive, si rifà solo la registrazione).
+
+Nome dei file: `<commessa>_<cartella>_<AAAAMMGG-hhmmss>_<casuale>.jpg` (ora italiana dello scatto).
+
+**Provarlo con l'archivio di prova**: titolare → *Usa archivio di prova*, crea un operatore e una
+commessa; operatore → tocca la commessa → *Scegli dalla galleria*. I file compaiono in
+`foto-cantieri/.archivio-simulato/<dittaId>/Foto Cantieri/...` e l'indice nel pannello Firestore.
+
+**Dal telefono** (stessa rete Wi-Fi): apri `http://<IP-del-computer>:5173` e aggiungi quell'indirizzo
+a `ORIGINI_APP` in `functions/.env.local` (poi riavvia gli emulatori). Il pulsante *Scatta foto*
+apre la fotocamera anche senza HTTPS; l'installazione come app richiederà HTTPS.
+
 ## Struttura
 
 ```
@@ -124,8 +151,9 @@ foto-cantieri/
 │       ├── firebase.ts     inizializzazione e collegamento agli emulatori
 │       ├── sessione.tsx    utente collegato, ditta e ruolo dal token
 │       ├── App.tsx         sceglie la pagina in base alla sessione
+│       ├── servizi/        compressione (1600 px JPEG), caricamento (PUT diretta)
 │       └── pagine/         Accesso, CreaDitta, HomeTitolare (+ SezioneOperatori,
-│                           SezioneCommesse), HomeOperatore
+│                           SezioneCommesse, SchedaArchivio), HomeOperatore, PaginaScatto
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
 │   └── src/
 │       ├── index.ts        elenco delle Functions
@@ -134,7 +162,8 @@ foto-cantieri/
 │       ├── accesso/        creaDitta, operatori, accessoOperatore,
 │       │                   codiciOperatore (impronte), tentativi (blocco errori)
 │       ├── archivio/       Archivio (interfaccia), GoogleDriveArchivio, ArchivioSimulato, fabbrica
-│       └── drive/          oauth (Google), config (client e origini), collegamento (Functions)
+│       ├── drive/          oauth (Google), config (client e origini), collegamento (Functions)
+│       └── foto/           apriCaricamento/registraFoto, cartelle, caricamentoSimulato
 ├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
@@ -142,7 +171,8 @@ foto-cantieri/
     ├── creaDitta.test.ts   creazione della ditta da parte del titolare
     ├── operatori.test.ts   codici operatore, accesso, blocchi, disattivazione
     ├── archivio.test.ts    cifratura, OAuth e archivi con un Google finto (senza emulatore)
-    └── collegamento.test.ts collegamento/scollegamento archivio, stato OAuth monouso
+    ├── collegamento.test.ts collegamento/scollegamento archivio, stato OAuth monouso
+    └── caricamento.test.ts caricamento foto: percorso completo e controlli
 ```
 
 ## Modello dati
@@ -154,7 +184,7 @@ foto-cantieri/
 | `ditte/{dittaId}/commesse/{id}` | numero, descrizione, cliente, attiva | titolare (non si cancellano: si disattivano) |
 | `ditte/{dittaId}/foto/{id}` | indice: id file e cartella nell'archivio, commessa, sottocartella, chi, quando | solo Function, dopo aver verificato il file |
 | `titolari/{uid}` | la ditta del titolare (impedisce doppioni) | solo Functions |
-| `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso`, `collegamentiInCorso` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
+| `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso`, `collegamentiInCorso`, `caricamenti`, `cacheCartelle` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
 
 I tipi completi sono in `shared/modello.ts`.
 

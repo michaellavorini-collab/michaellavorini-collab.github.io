@@ -15,6 +15,9 @@
  *   codiciOperatore/{impronta}              CodiceOperatore
  *   credenzialiArchivio/{dittaId}           CredenzialiArchivio
  *   collegamentiInCorso/{stato}             { dittaId, uid, origine, scadeIl } (OAuth)
+ *   caricamenti/{idCaricamento}             caricamento aperto, in attesa di registraFoto
+ *   cacheCartelle/{impronta}                id delle cartelle commessa/sottocartella
+ *   sessioniSimulate/{sessione}             solo archivio di prova
  *   tentativiAccesso/{chiave}               TentativiAccesso
  */
 
@@ -73,8 +76,6 @@ export interface Commessa {
   descrizione: string
   cliente: string
   attiva: boolean
-  /** Cartella della commessa nell'archivio, scritta solo dalle Functions. */
-  cartellaArchivioId?: string
   creataIl: Istante
   aggiornataIl: Istante
 }
