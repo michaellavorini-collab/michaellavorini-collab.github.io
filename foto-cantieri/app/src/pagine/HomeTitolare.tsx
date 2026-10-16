@@ -1,0 +1,52 @@
+import { useEffect, useState } from 'react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import type { Ditta } from '../../../shared/modello'
+import { db } from '../firebase'
+import { messaggioErrore } from '../errori'
+import { useSessione } from '../sessione'
+import { Caricamento, Errore, Pagina } from '../componenti'
+
+export default function HomeTitolare() {
+  const sessione = useSessione()
+  const [ditta, setDitta] = useState<Ditta | null>(null)
+  const [errore, setErrore] = useState<string | null>(null)
+
+  useEffect(
+    () =>
+      onSnapshot(
+        doc(db, 'ditte', sessione.dittaId!),
+        (s) => setDitta((s.data() as Ditta) ?? null),
+        (e) => setErrore(messaggioErrore(e)),
+      ),
+    [sessione.dittaId],
+  )
+
+  if (errore) return <Pagina><Errore testo={errore} /></Pagina>
+  if (!ditta) return <Pagina><Caricamento /></Pagina>
+
+  return (
+    <Pagina titolo={ditta.nome}>
+      <section className="scheda">
+        <p>Codice ditta da dare agli operatori:</p>
+        <p className="codice-grande" aria-label={`Codice ditta ${[...ditta.codiceDitta].join(' ')}`}>
+          {ditta.codiceDitta}
+        </p>
+      </section>
+
+      <section className="scheda">
+        <h2>Google Drive</h2>
+        <p>{ditta.archivio.stato === 'collegato' ? `Collegato: ${ditta.archivio.account ?? ''}` : 'Non ancora collegato.'}</p>
+        <button className="pulsante" disabled>Collega Google Drive (in arrivo)</button>
+      </section>
+
+      <section className="scheda">
+        <h2>Operatori e commesse</h2>
+        <p>In arrivo nei prossimi passi.</p>
+      </section>
+
+      <button className="pulsante testo" onClick={sessione.esci}>
+        Esci ({sessione.utente?.email})
+      </button>
+    </Pagina>
+  )
+}

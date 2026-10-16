@@ -34,6 +34,18 @@ L'app si collega agli emulatori sullo stesso indirizzo della pagina (gli emulato
 su `0.0.0.0`). La fotocamera e l'installazione come app richiedono HTTPS fuori da `localhost`:
 per quelle prove servirà un tunnel HTTPS (lo prepariamo al passo 6).
 
+## Accesso del titolare (passo 3)
+
+1. Avvia emulatori e app (vedi sopra), apri http://localhost:5173.
+2. **Entra con Google**: con gli emulatori si apre una finestra finta di Google.
+   Scegli *Add new account*, inserisci un'email qualsiasi e conferma.
+3. Scrivi il nome della ditta e premi **Crea la ditta**: compare il codice ditta di 6 caratteri.
+4. Nel pannello http://localhost:4000 vedi la ditta in Firestore (`ditte`, `codiciDitta`, `titolari`)
+   e in *Authentication* l'utente con i permessi `{"dittaId": …, "ruolo": "titolare"}`.
+
+La Function `creaDitta` accetta solo utenti entrati con Google, crea una sola ditta per titolare
+(richiamarla restituisce quella esistente) e assegna al token `dittaId` e `ruolo`.
+
 ## Struttura
 
 ```
@@ -46,12 +58,18 @@ foto-cantieri/
 │   ├── public/             icone e favicon
 │   └── src/
 │       ├── firebase.ts     inizializzazione e collegamento agli emulatori
-│       └── App.tsx         interfaccia (in italiano, pensata per il telefono)
+│       ├── sessione.tsx    utente collegato, ditta e ruolo dal token
+│       ├── App.tsx         sceglie la pagina in base alla sessione
+│       └── pagine/         Accesso, CreaDitta, HomeTitolare
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
-│   └── src/index.ts
+│   └── src/
+│       ├── index.ts        elenco delle Functions
+│       ├── comune.ts       accesso a Firestore/Auth, errori in italiano
+│       └── accesso/        creaDitta
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
-    └── regole.test.ts      regole di sicurezza Firestore
+    ├── regole.test.ts      regole di sicurezza Firestore
+    └── creaDitta.test.ts   creazione della ditta da parte del titolare
 ```
 
 ## Modello dati
@@ -62,6 +80,7 @@ foto-cantieri/
 | `ditte/{dittaId}/operatori/{id}` | nome, attivo | Function (creazione e codice); il titolare rinomina e attiva/disattiva |
 | `ditte/{dittaId}/commesse/{id}` | numero, descrizione, cliente, attiva | titolare (non si cancellano: si disattivano) |
 | `ditte/{dittaId}/foto/{id}` | indice: id file e cartella nell'archivio, commessa, sottocartella, chi, quando | solo Function, dopo aver verificato il file |
+| `titolari/{uid}` | la ditta del titolare (impedisce doppioni) | solo Functions |
 | `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
 
 I tipi completi sono in `shared/modello.ts`.

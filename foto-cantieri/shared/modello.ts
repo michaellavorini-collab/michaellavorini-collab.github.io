@@ -10,6 +10,7 @@
  *   ditte/{dittaId}/foto/{fotoId}           Foto (indice)
  *
  * Raccolte riservate alle Functions (le regole negano tutto ai client):
+ *   titolari/{uid}                          { dittaId }
  *   codiciDitta/{codiceDitta}               CodiceDitta
  *   codiciOperatore/{impronta}              CodiceOperatore
  *   credenzialiArchivio/{dittaId}           CredenzialiArchivio

@@ -34,6 +34,7 @@ body { margin: 0; min-height: 100dvh; }
   border-radius: 16px;
   padding: 20px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 .scheda p { margin: 0; }
@@ -58,3 +59,35 @@ body { margin: 0; min-height: 100dvh; }
 .messaggio { padding: 12px 14px; border-radius: 10px; font-weight: 500; }
 .messaggio.ok { background: #e6f4ea; color: var(--verde); }
 .messaggio.errore { background: #fdecea; color: var(--rosso); }
+
+.testata-azioni { margin-left: auto; }
+.pagina > .scheda + .scheda, .pagina > .scheda + .pulsante { margin-top: 16px; }
+.scheda h2 { font-size: 1.2rem; margin: 0; }
+.caricamento { text-align: center; color: var(--tenue); padding: 32px 0; }
+
+.campo { display: grid; gap: 6px; font-weight: 600; }
+.campo input {
+  font: inherit;
+  font-size: 1.15rem;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 2px solid var(--bordo);
+  border-radius: 12px;
+  background: #fff;
+  width: 100%;
+}
+.campo input:focus { outline: none; border-color: var(--blu); }
+
+.pulsante.testo { background: transparent; color: var(--tenue); font-weight: 500; font-size: 1rem; min-height: 56px; }
+
+.codice-grande {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-align: center;
+  color: var(--blu);
+  background: #eef3f8;
+  border-radius: 12px;
+  padding: 12px 0 12px 0.25em;
+}
