@@ -49,7 +49,36 @@ foto-cantieri/
 │       └── App.tsx         interfaccia (in italiano, pensata per il telefono)
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
 │   └── src/index.ts
+├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
+    └── regole.test.ts      regole di sicurezza Firestore
+```
+
+## Modello dati
+
+| Percorso | Contenuto | Chi scrive |
+|---|---|---|
+| `ditte/{dittaId}` | nome, codice ditta, titolare, sottocartelle, stato dell'archivio | Function `creaDitta`; il titolare cambia solo nome e sottocartelle |
+| `ditte/{dittaId}/operatori/{id}` | nome, attivo | Function (creazione e codice); il titolare rinomina e attiva/disattiva |
+| `ditte/{dittaId}/commesse/{id}` | numero, descrizione, cliente, attiva | titolare (non si cancellano: si disattivano) |
+| `ditte/{dittaId}/foto/{id}` | indice: id file e cartella nell'archivio, commessa, sottocartella, chi, quando | solo Function, dopo aver verificato il file |
+| `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
+
+I tipi completi sono in `shared/modello.ts`.
+
+## Regole di sicurezza
+
+Il token Firebase porta `dittaId` e `ruolo` (`titolare` o `operatore`, più `operatoreId`).
+
+- Si vede solo la propria ditta: il `dittaId` del token deve coincidere con quello del percorso.
+- L'operatore deve risultare `attivo` a **ogni** richiesta: disattivarlo lo blocca subito.
+- Gli operatori vedono solo le commesse attive e la propria scheda; non scrivono nulla direttamente.
+- L'indice foto e i dati riservati li scrivono solo le Functions.
+
+Per provare solo le regole (più veloce):
+
+```
+npx firebase emulators:exec --project demo-foto-cantieri --only firestore "npx vitest run tests/regole.test.ts"
 ```
 
 ## Perché React + Vite

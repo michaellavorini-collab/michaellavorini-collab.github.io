@@ -1,8 +1,108 @@
 rules_version = '2';
 
-// Passo 1: tutto chiuso. Le regole vere arrivano al passo 2.
+// Regole di Foto Cantieri.
+// Principio: ogni ditta vede solo i propri dati, decisi dal dittaId nel token.
+// I dati delicati (codici, credenziali dell'archivio, indice foto) li scrivono solo le Functions.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---- Chi è l'utente ----
+
+    function attributi() {
+      return request.auth.token;
+    }
+
+    function titolare(dittaId) {
+      return request.auth != null
+        && attributi().ruolo == 'titolare'
+        && attributi().dittaId == dittaId;
+    }
+
+    // L'operatore deve risultare ancora attivo a ogni richiesta:
+    // disattivarlo lo blocca subito, anche con un token ancora valido.
+    function operatoreAttivo(dittaId) {
+      return request.auth != null
+        && attributi().ruolo == 'operatore'
+        && attributi().dittaId == dittaId
+        && get(/databases/$(database)/documents/ditte/$(dittaId)/operatori/$(attributi().operatoreId)).data.attivo == true;
+    }
+
+    function membro(dittaId) {
+      return titolare(dittaId) || operatoreAttivo(dittaId);
+    }
+
+    // ---- Controlli sui campi ----
+
+    function testo(valore, minimo, massimo) {
+      return valore is string && valore.size() >= minimo && valore.size() <= massimo;
+    }
+
+    function cambiaSolo(campi) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campi);
+    }
+
+    // ---- Ditte ----
+
+    match /ditte/{dittaId} {
+      allow read: if membro(dittaId);
+      // La ditta la crea la Function "creaDitta" (genera il codice e i permessi del titolare).
+      allow create, delete: if false;
+      allow update: if titolare(dittaId)
+        && cambiaSolo(['nome', 'sottocartelle', 'aggiornataIl'])
+        && testo(request.resource.data.nome, 1, 80)
+        && request.resource.data.sottocartelle is list
+        && request.resource.data.sottocartelle.size() >= 1
+        && request.resource.data.sottocartelle.size() <= 20
+        && request.resource.data.aggiornataIl == request.time;
+
+      // ---- Operatori ----
+      match /operatori/{operatoreId} {
+        allow read: if titolare(dittaId)
+          || (operatoreAttivo(dittaId) && attributi().operatoreId == operatoreId);
+        // Creazione e codice personale passano dalle Functions (il codice va protetto).
+        allow create, delete: if false;
+        // Il titolare può rinominare e attivare/disattivare.
+        allow update: if titolare(dittaId)
+          && cambiaSolo(['nome', 'attivo', 'aggiornatoIl'])
+          && testo(request.resource.data.nome, 1, 60)
+          && request.resource.data.attivo is bool
+          && request.resource.data.aggiornatoIl == request.time;
+      }
+
+      // ---- Commesse ----
+      function commessaValida(d) {
+        return testo(d.numero, 1, 30)
+          && testo(d.descrizione, 0, 200)
+          && testo(d.cliente, 0, 120)
+          && d.attiva is bool
+          && d.aggiornataIl == request.time;
+      }
+
+      match /commesse/{commessaId} {
+        // Gli operatori vedono solo le commesse attive (le query devono filtrare attiva == true).
+        allow read: if titolare(dittaId)
+          || (operatoreAttivo(dittaId) && resource.data.attiva == true);
+        allow create: if titolare(dittaId)
+          && request.resource.data.keys().hasOnly(['numero', 'descrizione', 'cliente', 'attiva', 'creataIl', 'aggiornataIl'])
+          && request.resource.data.keys().hasAll(['numero', 'descrizione', 'cliente', 'attiva', 'creataIl', 'aggiornataIl'])
+          && commessaValida(request.resource.data)
+          && request.resource.data.creataIl == request.time;
+        allow update: if titolare(dittaId)
+          && cambiaSolo(['numero', 'descrizione', 'cliente', 'attiva', 'aggiornataIl'])
+          && commessaValida(request.resource.data);
+        // Le commesse non si cancellano: si disattivano (l'indice foto le richiama).
+        allow delete: if false;
+      }
+
+      // ---- Indice foto ----
+      match /foto/{fotoId} {
+        allow read: if membro(dittaId);
+        // Lo scrive solo la Function dopo aver verificato il file nell'archivio.
+        allow write: if false;
+      }
+    }
+
+    // ---- Tutto il resto (codici, credenziali, tentativi): solo Functions ----
     match /{document=**} {
       allow read, write: if false;
     }
