@@ -72,8 +72,43 @@ Per provarlo servono due finestre (per esempio una normale e una in incognito):
 ### Segreti locali
 
 `npm run setup` (e ogni avvio di emulatori o test) crea `functions/.secret.local` con valori casuali
-per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO`. Il file non va su git.
+per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO` (più la riga vuota `GOOGLE_CLIENT_SECRET=`
+da compilare a mano, vedi passo 5). Il file non va su git.
 Se lo cancelli, i codici operatore già creati smettono di funzionare: rigenerali dalla scheda Operatori.
+
+## Google Drive (passo 5)
+
+Le foto non passano mai dai nostri server: vanno nel Drive del titolare, cartella **Foto Cantieri**.
+Si chiede **solo** il permesso `drive.file` (l'app vede solo i file che crea lei).
+
+Flusso: il titolare preme **Collega Google Drive** → `driveAvviaCollegamento` crea uno "stato" monouso
+(10 minuti, contro i collegamenti falsificati) e restituisce l'indirizzo di consenso Google →
+Google rimanda a `driveRitorno`, che scambia il codice, **cifra il refresh token** (AES-256-GCM, legato
+al `dittaId`) in `credenzialiArchivio`, crea (o ritrova) la cartella e torna all'app.
+**Scollega** revoca il permesso su Google e cancella le credenziali; le foto restano nel Drive.
+
+Tutto il resto dell'app passa dall'interfaccia `Archivio` (`functions/src/archivio/`):
+`GoogleDriveArchivio` per Drive, `ArchivioSimulato` per lo sviluppo; `fabbrica.ts` sceglie quale.
+
+### Configurare il client OAuth di test
+
+Nella Google Cloud Console, client OAuth di tipo **Applicazione web**:
+- URI di reindirizzamento autorizzato: `http://localhost:5001/demo-foto-cantieri/europe-west1/driveRitorno`
+- schermata di consenso: aggiungi il tuo account tra gli **utenti di test**; ambito `.../auth/drive.file`
+- abilita la **Google Drive API** nel progetto.
+
+Poi, sul tuo computer (file esclusi da git, creati al primo avvio degli emulatori):
+- `functions/.env.local` → `GOOGLE_CLIENT_ID=...apps.googleusercontent.com`
+- `functions/.secret.local` → `GOOGLE_CLIENT_SECRET=...`
+
+Riavvia gli emulatori. Se apri l'app da un altro indirizzo (es. dal telefono `http://192.168.1.20:5173`)
+aggiungilo a `ORIGINI_APP` in `functions/.env.local`.
+
+### Senza client OAuth: archivio di prova
+
+In sviluppo la scheda Ditta mostra **Usa archivio di prova**: le "cartelle" diventano cartelle
+sul tuo computer in `foto-cantieri/.archivio-simulato/<dittaId>/Foto Cantieri/` (esclusa da git).
+Funziona solo con gli emulatori: in produzione la Function lo rifiuta.
 
 ## Struttura
 
@@ -95,14 +130,19 @@ foto-cantieri/
 │   └── src/
 │       ├── index.ts        elenco delle Functions
 │       ├── comune.ts       accesso a Firestore/Auth, errori in italiano
-│       └── accesso/        creaDitta, operatori, accessoOperatore,
-│                           codiciOperatore (impronte), tentativi (blocco errori)
+│       ├── cifratura.ts    AES-256-GCM per i token dell'archivio
+│       ├── accesso/        creaDitta, operatori, accessoOperatore,
+│       │                   codiciOperatore (impronte), tentativi (blocco errori)
+│       ├── archivio/       Archivio (interfaccia), GoogleDriveArchivio, ArchivioSimulato, fabbrica
+│       └── drive/          oauth (Google), config (client e origini), collegamento (Functions)
 ├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
     ├── regole.test.ts      regole di sicurezza Firestore
     ├── creaDitta.test.ts   creazione della ditta da parte del titolare
-    └── operatori.test.ts   codici operatore, accesso, blocchi, disattivazione
+    ├── operatori.test.ts   codici operatore, accesso, blocchi, disattivazione
+    ├── archivio.test.ts    cifratura, OAuth e archivi con un Google finto (senza emulatore)
+    └── collegamento.test.ts collegamento/scollegamento archivio, stato OAuth monouso
 ```
 
 ## Modello dati
@@ -114,7 +154,7 @@ foto-cantieri/
 | `ditte/{dittaId}/commesse/{id}` | numero, descrizione, cliente, attiva | titolare (non si cancellano: si disattivano) |
 | `ditte/{dittaId}/foto/{id}` | indice: id file e cartella nell'archivio, commessa, sottocartella, chi, quando | solo Function, dopo aver verificato il file |
 | `titolari/{uid}` | la ditta del titolare (impedisce doppioni) | solo Functions |
-| `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
+| `codiciDitta`, `codiciOperatore`, `credenzialiArchivio`, `tentativiAccesso`, `collegamentiInCorso` | codici di accesso (solo impronte), token dell'archivio cifrati, tentativi falliti | solo Functions; nessun client li legge |
 
 I tipi completi sono in `shared/modello.ts`.
 

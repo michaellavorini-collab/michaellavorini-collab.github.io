@@ -14,6 +14,7 @@
  *   codiciDitta/{codiceDitta}               CodiceDitta
  *   codiciOperatore/{impronta}              CodiceOperatore
  *   credenzialiArchivio/{dittaId}           CredenzialiArchivio
+ *   collegamentiInCorso/{stato}             { dittaId, uid, origine, scadeIl } (OAuth)
  *   tentativiAccesso/{chiave}               TentativiAccesso
  */
 

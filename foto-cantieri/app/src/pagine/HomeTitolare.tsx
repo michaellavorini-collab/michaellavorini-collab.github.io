@@ -7,6 +7,7 @@ import { useSessione } from '../sessione'
 import { Caricamento, Errore, Pagina, Schede } from '../componenti'
 import SezioneOperatori from './SezioneOperatori'
 import SezioneCommesse from './SezioneCommesse'
+import SchedaArchivio from './SchedaArchivio'
 
 type Sezione = 'ditta' | 'operatori' | 'commesse'
 
@@ -50,11 +51,7 @@ export default function HomeTitolare() {
             </p>
           </section>
 
-          <section className="scheda">
-            <h2>Google Drive</h2>
-            <p>{ditta.archivio.stato === 'collegato' ? `Collegato: ${ditta.archivio.account ?? ''}` : 'Non ancora collegato.'}</p>
-            <button className="pulsante" disabled>Collega Google Drive (in arrivo)</button>
-          </section>
+          <SchedaArchivio archivio={ditta.archivio} />
 
           <button className="pulsante testo" onClick={() => sessione.esci()}>
             Esci ({sessione.utente?.email})

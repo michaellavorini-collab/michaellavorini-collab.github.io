@@ -6,11 +6,16 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 const FILE = new URL('../functions/.secret.local', import.meta.url)
 const SEGRETI = ['PEPE_CODICI_OPERATORE', 'CHIAVE_CIFRATURA_ARCHIVIO']
+// Questi li inserisce a mano lo sviluppatore (dal client OAuth di Google): qui solo il segnaposto.
+const DA_COMPILARE = ['GOOGLE_CLIENT_SECRET']
 
 const attuale = existsSync(FILE) ? readFileSync(FILE, 'utf8') : ''
-const mancanti = SEGRETI.filter((nome) => !new RegExp(`^${nome}=`, 'm').test(attuale))
+const manca = (nome) => !new RegExp(`^${nome}=`, 'm').test(attuale)
+const mancanti = [...SEGRETI, ...DA_COMPILARE].filter(manca)
 if (mancanti.length) {
-  const righe = mancanti.map((nome) => `${nome}=${randomBytes(32).toString('base64')}`)
+  const righe = mancanti.map((nome) =>
+    DA_COMPILARE.includes(nome) ? `${nome}=` : `${nome}=${randomBytes(32).toString('base64')}`,
+  )
   writeFileSync(FILE, (attuale && !attuale.endsWith('\n') ? attuale + '\n' : attuale) + righe.join('\n') + '\n')
   console.log(`Segreti locali creati: ${mancanti.join(', ')}`)
 }

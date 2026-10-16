@@ -238,7 +238,7 @@ describe('operatore disattivato', () => {
 })
 
 describe('raccolte riservate alle Functions', () => {
-  const riservati = ['titolari/titolareA', 'codiciDitta/CODA23', 'codiciOperatore/impronta', 'credenzialiArchivio/dittaA', 'tentativiAccesso/x']
+  const riservati = ['titolari/titolareA', 'collegamentiInCorso/x', 'codiciDitta/CODA23', 'codiciOperatore/impronta', 'credenzialiArchivio/dittaA', 'tentativiAccesso/x']
 
   it('nessuno le legge, nemmeno il titolare', async () => {
     for (const percorso of riservati) {
