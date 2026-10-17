@@ -31,8 +31,9 @@ Si usano due terminali: nel primo `npm run emulatori`, nel secondo `npm run app`
 
 Telefono e computer sulla stessa rete Wi-Fi: apri `http://<IP-del-computer>:5173`.
 L'app si collega agli emulatori sullo stesso indirizzo della pagina (gli emulatori ascoltano
-su `0.0.0.0`). La fotocamera e l'installazione come app richiedono HTTPS fuori da `localhost`:
-per quelle prove servirà un tunnel HTTPS (lo prepariamo al passo 6).
+su `0.0.0.0`). Aggiungi l'indirizzo a `ORIGINI_APP` in `functions/.env.local` (vedi passo 6).
+Il pulsante *Scatta foto* apre la fotocamera anche senza HTTPS; per installare l'app sul telefono
+servirà invece HTTPS (con il deploy su Firebase Hosting, o con un tunnel HTTPS).
 
 ## Accesso del titolare (passo 3)
 
@@ -137,6 +138,21 @@ commessa; operatore → tocca la commessa → *Scegli dalla galleria*. I file co
 a `ORIGINI_APP` in `functions/.env.local` (poi riavvia gli emulatori). Il pulsante *Scatta foto*
 apre la fotocamera anche senza HTTPS; l'installazione come app richiederà HTTPS.
 
+## Galleria della commessa (passo 7)
+
+Nella pagina della commessa (operatore) e da **Commesse → Foto** (titolare): miniature in griglia,
+**più recenti prima, 12 alla volta** con *Carica altre foto*. Tocca una foto per vederla grande,
+con cartella, data e autore; *Più recente / Più vecchia* per scorrere.
+
+- L'elenco viene dall'indice in Firestore (query `commessaId` + `caricataIl` decrescente, `limit(12)`,
+  poi `startAfter`). La prima pagina è in tempo reale: le foto appena caricate compaiono subito.
+- Le immagini passano dalla Function HTTP `miniatura` **solo in transito**: la Function verifica il
+  token (anche se revocato) e che l'operatore sia attivo, prende la ditta dal token, legge la
+  miniatura da Drive (`thumbnailLink` a 400 px, 1600 px per la vista grande) e la restituisce.
+  Non salva nulla su disco né nel database; nel browser restano solo in memoria
+  (`Cache-Control: private`). Se Drive non ha ancora pronta la miniatura, passa la foto stessa.
+- CORS solo per gli indirizzi in `ORIGINI_APP`.
+
 ## Struttura
 
 ```
@@ -151,9 +167,9 @@ foto-cantieri/
 │       ├── firebase.ts     inizializzazione e collegamento agli emulatori
 │       ├── sessione.tsx    utente collegato, ditta e ruolo dal token
 │       ├── App.tsx         sceglie la pagina in base alla sessione
-│       ├── servizi/        compressione (1600 px JPEG), caricamento (PUT diretta)
+│       ├── servizi/        compressione (1600 px JPEG), caricamento (PUT diretta), miniature
 │       └── pagine/         Accesso, CreaDitta, HomeTitolare (+ SezioneOperatori,
-│                           SezioneCommesse, SchedaArchivio), HomeOperatore, PaginaScatto
+│                           SezioneCommesse, SchedaArchivio), HomeOperatore, PaginaScatto, Galleria
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
 │   └── src/
 │       ├── index.ts        elenco delle Functions
@@ -163,7 +179,7 @@ foto-cantieri/
 │       │                   codiciOperatore (impronte), tentativi (blocco errori)
 │       ├── archivio/       Archivio (interfaccia), GoogleDriveArchivio, ArchivioSimulato, fabbrica
 │       ├── drive/          oauth (Google), config (client e origini), collegamento (Functions)
-│       └── foto/           apriCaricamento/registraFoto, cartelle, caricamentoSimulato
+│       └── foto/           apriCaricamento/registraFoto, cartelle, miniatura, caricamentoSimulato
 ├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
@@ -172,7 +188,9 @@ foto-cantieri/
     ├── operatori.test.ts   codici operatore, accesso, blocchi, disattivazione
     ├── archivio.test.ts    cifratura, OAuth e archivi con un Google finto (senza emulatore)
     ├── collegamento.test.ts collegamento/scollegamento archivio, stato OAuth monouso
-    └── caricamento.test.ts caricamento foto: percorso completo e controlli
+    ├── caricamento.test.ts caricamento foto: percorso completo e controlli
+    ├── galleria.test.ts    miniature solo in transito, permessi, paginazione 12 alla volta
+    └── aiuti*.ts           strumenti comuni alle prove
 ```
 
 ## Modello dati

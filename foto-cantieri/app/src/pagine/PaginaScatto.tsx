@@ -4,6 +4,7 @@ import { comprimiFoto } from '../servizi/compressione'
 import { inviaByte, passi, type FotoInCoda } from '../servizi/caricamento'
 import { messaggioErrore } from '../errori'
 import { Pagina } from '../componenti'
+import Galleria from './Galleria'
 
 const CHIAVE_SOTTOCARTELLA = 'fotoCantieri.sottocartella'
 
@@ -26,7 +27,8 @@ const TESTO_FASE: Record<FotoInCoda['fase'], string> = {
   errore: 'Non salvata',
 }
 
-export default function PaginaScatto({ commessa, ditta, indietro }: {
+export default function PaginaScatto({ dittaId, commessa, ditta, indietro }: {
+  dittaId: string
   commessa: Commessa & { id: string }
   ditta: Ditta
   indietro: () => void
@@ -177,6 +179,11 @@ export default function PaginaScatto({ commessa, ditta, indietro }: {
           </ul>
         </section>
       )}
+
+      <section className="scheda">
+        <h2>Foto della commessa</h2>
+        <Galleria dittaId={dittaId} commessaId={commessa.id} />
+      </section>
     </Pagina>
   )
 }

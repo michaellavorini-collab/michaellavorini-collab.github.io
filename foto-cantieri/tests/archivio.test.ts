@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cifra, decifra } from '../functions/src/cifratura'
 import { nomeCartellaSicuro, ArchivioScollegato } from '../functions/src/archivio/Archivio'
-import { GoogleDriveArchivio, testoPerRicerca } from '../functions/src/archivio/GoogleDriveArchivio'
+import { GoogleDriveArchivio, linkMiniatura, testoPerRicerca } from '../functions/src/archivio/GoogleDriveArchivio'
 import { ArchivioSimulato } from '../functions/src/archivio/ArchivioSimulato'
 import { scambiaCodice, SCOPE_DRIVE_FILE, urlAutorizzazione } from '../functions/src/drive/oauth'
 
@@ -174,6 +174,42 @@ describe('GoogleDriveArchivio', () => {
     expect(await a.infoFile('f1')).toEqual({ id: 'f1', nome: 'a.jpg', mimeType: 'image/jpeg', dimensione: 5000, cartelle: ['cart1'] })
     expect(await a.infoFile('f2')).toBeNull()
     expect(await a.infoFile('f3')).toBeNull()
+  })
+
+  it('miniatura: chiede a Drive la misura voluta, con il token', async () => {
+    const chiamate = fintoGoogle({
+      'GET https://www.googleapis.com/drive/v3/files/f1?': json({ thumbnailLink: 'https://lh3.googleusercontent.com/abc=s220' }),
+      'GET https://lh3.googleusercontent.com/abc=s400': () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } }),
+    })
+    const m = await new GoogleDriveArchivio(config, 'rt', accesso).miniatura('f1', 400)
+    expect(m).toEqual({ contenuto: Buffer.from([1, 2, 3]), mimeType: 'image/jpeg' })
+    expect((chiamate[1].init!.headers as Record<string, string>).Authorization).toBe('Bearer at')
+  })
+
+  it('miniatura non ancora pronta su Drive: passa la foto stessa', async () => {
+    const chiamate = fintoGoogle({
+      'GET https://www.googleapis.com/drive/v3/files/f1?fields': json({}),
+      'GET https://www.googleapis.com/drive/v3/files/f1?alt=media': () => new Response(new Uint8Array([9]), { headers: { 'Content-Type': 'image/jpeg' } }),
+    })
+    const m = await new GoogleDriveArchivio(config, 'rt', accesso).miniatura('f1', 400)
+    expect(m!.contenuto).toEqual(Buffer.from([9]))
+    expect(chiamate[1].url).toContain('alt=media')
+  })
+
+  it('miniatura di un file nel cestino o sparito: null', async () => {
+    fintoGoogle({
+      'GET https://www.googleapis.com/drive/v3/files/f2?': json({ trashed: true }),
+      'GET https://www.googleapis.com/drive/v3/files/f3?': json({ error: 'notFound' }, 404),
+    })
+    const a = new GoogleDriveArchivio(config, 'rt', accesso)
+    expect(await a.miniatura('f2', 400)).toBeNull()
+    expect(await a.miniatura('f3', 400)).toBeNull()
+  })
+
+  it('cambia la misura nel link della miniatura', () => {
+    expect(linkMiniatura('https://lh3.googleusercontent.com/abc=s220', 400)).toBe('https://lh3.googleusercontent.com/abc=s400')
+    expect(linkMiniatura('https://lh3.googleusercontent.com/abc=s220-c', 1600)).toBe('https://lh3.googleusercontent.com/abc=s1600')
+    expect(linkMiniatura('https://lh3.googleusercontent.com/abc', 400)).toBe('https://lh3.googleusercontent.com/abc=s400')
   })
 
   it('protegge le ricerche dagli apici', () => {

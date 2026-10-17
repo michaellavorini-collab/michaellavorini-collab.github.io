@@ -17,3 +17,4 @@ export { accessoOperatore } from "./accesso/accessoOperatore";
 export { driveAvviaCollegamento, driveRitorno, scollegaArchivio, collegaArchivioSimulato } from "./drive/collegamento";
 export { apriCaricamento, registraFoto } from "./foto/caricamento";
 export { caricamentoSimulato } from "./foto/caricamentoSimulato";
+export { miniatura } from "./foto/miniatura";

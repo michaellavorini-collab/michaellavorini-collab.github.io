@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../comune";
-import { nomeCartellaSicuro, type Archivio, type InfoFile, type RichiestaCaricamento } from "./Archivio";
+import { nomeCartellaSicuro, type Archivio, type Immagine, type InfoFile, type RichiestaCaricamento } from "./Archivio";
 
 /** Vero solo quando le Functions girano nell'emulatore locale. */
 export const inEmulatore = () => process.env.FUNCTIONS_EMULATOR === "true";
@@ -84,6 +84,13 @@ export class ArchivioSimulato implements Archivio {
     const host = new URL(r.origine).hostname;
     const progetto = process.env.GCLOUD_PROJECT ?? "demo-foto-cantieri";
     return { urlCaricamento: `http://${host}:5001/${progetto}/europe-west1/caricamentoSimulato?sessione=${sessione}` };
+  }
+
+  /** In sviluppo si restituisce la foto intera (già ridotta a ~1600 px dal telefono). */
+  async miniatura(fileId: string): Promise<Immagine | null> {
+    const info = await this.infoFile(fileId);
+    if (!info) return null;
+    return { contenuto: await readFile(this.percorso(fileId)), mimeType: info.mimeType };
   }
 
   async infoFile(fileId: string): Promise<InfoFile | null> {

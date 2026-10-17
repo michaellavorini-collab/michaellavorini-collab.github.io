@@ -156,3 +156,19 @@ label.pulsante { display: grid; place-items: center; cursor: pointer; }
 .coda-voce.errore strong, .testo-errore { color: var(--rosso); }
 .testo-errore { font-size: 0.9rem; }
 .coda-voce progress { width: 100%; height: 8px; }
+
+.griglia { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tessera { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: #e3e8ee; cursor: pointer; }
+.tessera img, .tessera .immagine-attesa { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tessera-etichetta { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: #fff; background: rgb(0 0 0 / 0.55); }
+.immagine-attesa { display: block; background: linear-gradient(90deg, #e3e8ee, #f1f4f7, #e3e8ee); background-size: 200% 100%; animation: luccica 1.2s infinite linear; }
+@keyframes luccica { to { background-position: -200% 0; } }
+.immagine-errore { width: 100%; height: 100%; border: 0; background: #fdecea; color: var(--rosso); font: inherit; font-size: 0.75rem; padding: 4px; }
+
+.visore { position: fixed; inset: 0; z-index: 10; background: #0b0f14; color: #fff; display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto; gap: 12px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+.visore-immagine { display: grid; place-items: center; min-height: 0; }
+.visore-immagine img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.visore-immagine .immagine-attesa { width: 80%; aspect-ratio: 4 / 3; border-radius: 8px; opacity: 0.3; }
+.visore-info { margin: 0; text-align: center; color: #d5dbe1; }
+.visore-comandi { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.visore .pulsante.secondario { background: transparent; color: #fff; border-color: #fff; }

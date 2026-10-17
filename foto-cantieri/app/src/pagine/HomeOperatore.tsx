@@ -42,7 +42,7 @@ export default function HomeOperatore() {
   if (!operatore || !ditta || !commesse) return <Pagina><Caricamento /></Pagina>
 
   const scelta = commesse.find((c) => c.id === sceltaId)
-  if (scelta) return <PaginaScatto commessa={scelta} ditta={ditta} indietro={() => setSceltaId(null)} />
+  if (scelta) return <PaginaScatto dittaId={dittaId!} commessa={scelta} ditta={ditta} indietro={() => setSceltaId(null)} />
 
   return (
     <Pagina titolo={`Ciao ${operatore.nome}`}>

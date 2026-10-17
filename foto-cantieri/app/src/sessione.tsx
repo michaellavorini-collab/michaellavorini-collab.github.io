@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { onIdTokenChanged, signOut, type User } from 'firebase/auth'
 import type { Ruolo } from '../../shared/modello'
 import { auth } from './firebase'
+import { svuotaImmagini } from './servizi/miniature'
 
 export interface Sessione {
   caricamento: boolean
@@ -42,6 +43,7 @@ export function FornitoreSessione({ children }: { children: ReactNode }) {
   const aggiorna = useCallback(async () => void (await auth.currentUser?.getIdToken(true)), [])
   const esci = useCallback(async (testo?: string) => {
     setAvviso(testo ?? null)
+    svuotaImmagini()
     await signOut(auth)
   }, [])
   const valore = useMemo<Sessione>(() => ({ ...stato, avviso, aggiorna, esci }), [stato, avviso, aggiorna, esci])

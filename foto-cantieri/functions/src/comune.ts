@@ -64,16 +64,15 @@ export interface Membro {
 }
 
 /**
- * Il chiamante deve appartenere alla ditta: titolare, oppure operatore ancora attivo
+ * L'utente del token deve appartenere alla ditta: titolare, oppure operatore ancora attivo
  * (controllato a ogni chiamata, come nelle regole Firestore).
  */
-export async function richiediMembro(req: CallableRequest): Promise<Membro> {
-  const utente = richiediLogin(req);
-  const { ruolo, dittaId, operatoreId } = attributi(req);
-  if (ruolo === "titolare" && dittaId) {
-    return { dittaId, ruolo, autore: String(utente.token.name ?? utente.token.email ?? "Titolare") };
+export async function membroDaToken(token: Record<string, unknown>): Promise<Membro> {
+  const { ruolo, dittaId, operatoreId } = token;
+  if (ruolo === "titolare" && typeof dittaId === "string") {
+    return { dittaId, ruolo, autore: String(token.name ?? token.email ?? "Titolare") };
   }
-  if (ruolo === "operatore" && dittaId && operatoreId) {
+  if (ruolo === "operatore" && typeof dittaId === "string" && typeof operatoreId === "string") {
     const op = await db().doc(`ditte/${dittaId}/operatori/${operatoreId}`).get();
     if (op.get("attivo") !== true) {
       throw errore("permission-denied", "Il tuo accesso è stato disattivato. Rivolgiti al titolare.");
@@ -81,6 +80,10 @@ export async function richiediMembro(req: CallableRequest): Promise<Membro> {
     return { dittaId, ruolo, operatoreId, autore: String(op.get("nome")) };
   }
   throw errore("permission-denied", "Non fai parte di una ditta.");
+}
+
+export async function richiediMembro(req: CallableRequest): Promise<Membro> {
+  return membroDaToken(richiediLogin(req).token as unknown as Record<string, unknown>);
 }
 
 /** Id di documento passato dal client: solo lettere, cifre, - e _. */

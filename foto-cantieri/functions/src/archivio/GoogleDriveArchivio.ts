@@ -1,7 +1,14 @@
-import { ArchivioScollegato, nomeCartellaSicuro, type Archivio, type InfoFile, type RichiestaCaricamento } from "./Archivio";
+import { ArchivioScollegato, nomeCartellaSicuro, type Archivio, type Immagine, type InfoFile, type RichiestaCaricamento } from "./Archivio";
 import { rinnovaAccesso, URL_GOOGLE, type ConfigOAuth } from "../drive/oauth";
 
 const TIPO_CARTELLA = "application/vnd.google-apps.folder";
+
+/** Le miniature di Drive finiscono con "=s220": si chiede la misura voluta. */
+export function linkMiniatura(thumbnailLink: string, lato: number): string {
+  return /=s\d+(-[a-z0-9-]+)?$/i.test(thumbnailLink)
+    ? thumbnailLink.replace(/=s\d+(-[a-z0-9-]+)?$/i, `=s${lato}`)
+    : `${thumbnailLink}=s${lato}`;
+}
 
 /** Testo dentro apici singoli nelle ricerche di Drive. */
 export function testoPerRicerca(t: string): string {
@@ -102,6 +109,31 @@ export class GoogleDriveArchivio implements Archivio {
       if (e instanceof ArchivioScollegato) throw e;
       return null;
     }
+  }
+
+  async miniatura(fileId: string, lato: number): Promise<Immagine | null> {
+    let info: { thumbnailLink?: string; trashed?: boolean };
+    try {
+      info = await this.chiama(`/files/${encodeURIComponent(fileId)}?fields=thumbnailLink,trashed`);
+    } catch (e) {
+      if (e instanceof ArchivioScollegato) throw e;
+      return null;
+    }
+    if (info.trashed) return null;
+    const auth = { Authorization: `Bearer ${await this.token()}` };
+
+    if (info.thumbnailLink) {
+      const r = await fetch(linkMiniatura(info.thumbnailLink, lato), { headers: auth });
+      if (r.ok) {
+        return { contenuto: Buffer.from(await r.arrayBuffer()), mimeType: r.headers.get("content-type") ?? "image/jpeg" };
+      }
+    }
+    // Appena caricata, Drive può non avere ancora la miniatura: si passa la foto
+    // (già compressa a ~1600 px dal telefono), sempre solo in transito.
+    const r = await fetch(`${URL_GOOGLE.drive}/files/${encodeURIComponent(fileId)}?alt=media`, { headers: auth });
+    if (r.status === 401) throw new ArchivioScollegato();
+    if (!r.ok) return null;
+    return { contenuto: Buffer.from(await r.arrayBuffer()), mimeType: r.headers.get("content-type") ?? "image/jpeg" };
   }
 
   async cartellaEsiste(cartellaId: string): Promise<boolean> {

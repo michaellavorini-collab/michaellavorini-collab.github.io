@@ -4,6 +4,7 @@ import { LIMITI, type Commessa } from '../../../shared/modello'
 import { db } from '../firebase'
 import { messaggioErrore } from '../errori'
 import { Caricamento, Errore } from '../componenti'
+import Galleria from './Galleria'
 
 type ConId = Commessa & { id: string }
 
@@ -12,6 +13,7 @@ export default function SezioneCommesse({ dittaId }: { dittaId: string }) {
   const [commesse, setCommesse] = useState<ConId[] | null>(null)
   const [campi, setCampi] = useState({ numero: '', descrizione: '', cliente: '' })
   const [errore, setErrore] = useState<string | null>(null)
+  const [galleriaDi, setGalleriaDi] = useState<string | null>(null)
 
   useEffect(
     () =>
@@ -55,6 +57,19 @@ export default function SezioneCommesse({ dittaId }: { dittaId: string }) {
 
   if (!commesse) return <Caricamento />
 
+  const inGalleria = commesse.find((c) => c.id === galleriaDi)
+  if (inGalleria) {
+    return (
+      <>
+        <button className="pulsante testo indietro" onClick={() => setGalleriaDi(null)}>‹ Commesse</button>
+        <section className="scheda">
+          <h2>{inGalleria.numero} · {inGalleria.descrizione}</h2>
+          <Galleria dittaId={dittaId} commessaId={inGalleria.id} />
+        </section>
+      </>
+    )
+  }
+
   const campo = (nome: keyof typeof campi, etichetta: string, massimo: number, obbligatorio = false, esempio = '') => (
     <label className="campo">
       {etichetta}
@@ -94,6 +109,7 @@ export default function SezioneCommesse({ dittaId }: { dittaId: string }) {
                 {c.cliente && <span className="tenue">{c.cliente}</span>}
               </div>
               <div className="riga-azioni">
+                <button className="pulsante piccolo" onClick={() => setGalleriaDi(c.id)}>Foto</button>
                 <button className={c.attiva ? 'pulsante piccolo secondario' : 'pulsante piccolo'} onClick={() => cambiaStato(c)}>
                   {c.attiva ? 'Chiudi' : 'Riapri'}
                 </button>

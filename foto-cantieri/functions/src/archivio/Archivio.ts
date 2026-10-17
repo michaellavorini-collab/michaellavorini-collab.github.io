@@ -32,6 +32,17 @@ export interface Archivio {
 
   /** Informazioni su un file creato dall'app, o null se non esiste / è nel cestino. */
   infoFile(fileId: string): Promise<InfoFile | null>;
+
+  /**
+   * Immagine ridotta (lato lungo circa "lato" pixel), letta dall'archivio al momento.
+   * Le Functions la passano al telefono senza salvarla. Null se il file non c'è più.
+   */
+  miniatura(fileId: string, lato: number): Promise<Immagine | null>;
+}
+
+export interface Immagine {
+  contenuto: Buffer;
+  mimeType: string;
 }
 
 export interface RichiestaCaricamento {

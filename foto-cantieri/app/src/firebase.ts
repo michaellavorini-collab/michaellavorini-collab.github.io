@@ -23,3 +23,6 @@ const host = window.location.hostname
 connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true })
 connectFirestoreEmulator(db, host, 8080)
 connectFunctionsEmulator(functions, host, 5001)
+
+/** Indirizzo base delle Functions HTTP (es. miniature). */
+export const URL_FUNZIONI = `http://${host}:5001/${PROGETTO}/${REGIONE}`
