@@ -1,0 +1,103 @@
+# Prove automatiche di Foto Cantieri (cartella foto-cantieri/), sempre con gli emulatori Firebase:
+# nessun progetto reale, nessun segreto vero (quelli di prova li genera prepara-segreti.mjs).
+name: Foto Cantieri
+
+on:
+  # Sui rami di lavoro basta la pull request (evita di eseguire tutto due volte).
+  push:
+    branches: [main]
+    paths: ['foto-cantieri/**', '.github/workflows/foto-cantieri.yml']
+  pull_request:
+    paths: ['foto-cantieri/**', '.github/workflows/foto-cantieri.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foto-cantieri-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: foto-cantieri
+
+jobs:
+  prove:
+    name: Regole, Functions e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            foto-cantieri/package-lock.json
+            foto-cantieri/app/package-lock.json
+            foto-cantieri/functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Cache degli emulatori Firebase
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulatori-${{ hashFiles('foto-cantieri/package-lock.json') }}
+      - name: Dipendenze
+        run: |
+          npm ci
+          npm --prefix app ci
+          npm --prefix functions ci
+      - name: Segreti di prova
+        run: node scripts/prepara-segreti.mjs
+      - name: Controllo dei tipi e build dell'app
+        run: npm --prefix app run build
+      - name: Prove con gli emulatori (regole, Functions, archivio)
+        run: npm test
+
+  e2e:
+    name: Prove end-to-end nel browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            foto-cantieri/package-lock.json
+            foto-cantieri/app/package-lock.json
+            foto-cantieri/functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Cache degli emulatori Firebase
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulatori-${{ hashFiles('foto-cantieri/package-lock.json') }}
+      - name: Dipendenze
+        run: |
+          npm ci
+          npm --prefix app ci
+          npm --prefix functions ci
+      - name: Browser per le prove
+        run: npx playwright install --with-deps chromium
+      - name: Segreti di prova
+        run: node scripts/prepara-segreti.mjs
+      - name: Prove end-to-end
+        run: npm run test:e2e
+      - name: Rapporto in caso di errore
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapporto-e2e
+          path: |
+            foto-cantieri/playwright-report/
+            foto-cantieri/test-results/
+          retention-days: 7

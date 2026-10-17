@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "foto",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "commessaId", "order": "ASCENDING" },
+        { "fieldPath": "caricataIl", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "commesse",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "attiva", "order": "ASCENDING" },
+        { "fieldPath": "numero", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
