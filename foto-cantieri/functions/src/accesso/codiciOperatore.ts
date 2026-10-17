@@ -9,7 +9,7 @@ import { defineSecret } from "firebase-functions/params";
 export const PEPE_CODICI_OPERATORE = defineSecret("PEPE_CODICI_OPERATORE");
 
 /** Cifre del codice personale generato. */
-export const CIFRE_CODICE_OPERATORE = 5;
+export const CIFRE_CODICE_OPERATORE = 8;
 
 export function generaCodiceOperatore(): string {
   return String(randomInt(10 ** CIFRE_CODICE_OPERATORE)).padStart(CIFRE_CODICE_OPERATORE, "0");

@@ -50,7 +50,7 @@ La Function `creaDitta` accetta solo utenti entrati con Google, crea una sola di
 ## Operatori (passo 4)
 
 Il titolare, nella scheda **Operatori**, aggiunge un operatore: compare il suo codice personale
-di 5 cifre **una sola volta** (si salva solo un'impronta HMAC con un segreto, non il codice).
+di **8 cifre** (es. `8156 0894`, 100 milioni di combinazioni per ditta) **una sola volta** (si salva solo un'impronta HMAC con un segreto, non il codice).
 Da lì può generare un **nuovo codice** (il vecchio smette subito di valere) e **disattivare/riattivare**.
 
 L'operatore entra dalla pagina iniziale con **codice ditta + codice personale**. La Function
@@ -76,6 +76,7 @@ Per provarlo servono due finestre (per esempio una normale e una in incognito):
 per `PEPE_CODICI_OPERATORE` e `CHIAVE_CIFRATURA_ARCHIVIO` (più la riga `GOOGLE_CLIENT_SECRET=da-compilare`
 da compilare a mano, vedi passo 5). Il file non va su git.
 Se lo cancelli, i codici operatore già creati smettono di funzionare: rigenerali dalla scheda Operatori.
+(Gli operatori creati prima del passaggio a 8 cifre vanno rigenerati con *Nuovo codice*.)
 
 ## Google Drive (passo 5)
 
@@ -84,8 +85,13 @@ Si chiede **solo** il permesso `drive.file` (l'app vede solo i file che crea lei
 
 Flusso: il titolare preme **Collega Google Drive** → `driveAvviaCollegamento` crea uno "stato" monouso
 (10 minuti, contro i collegamenti falsificati) e restituisce l'indirizzo di consenso Google →
-Google rimanda a `driveRitorno`, che scambia il codice, **cifra il refresh token** (AES-256-GCM, legato
-al `dittaId`) in `credenzialiArchivio`, crea (o ritrova) la cartella e torna all'app.
+Google rimanda a `driveRitorno`, che scambia il codice e mette il **refresh token cifrato**
+(AES-256-GCM, legato al `dittaId`) **in attesa di conferma**; poi torna all'app con un codice di
+conferma monouso dopo `#` (resta nel browser, non arriva a nessun server). L'app chiama da sola
+`driveConfermaCollegamento`, che collega il Drive **solo se chi conferma è lo stesso titolare che ha
+avviato il collegamento**, entro 10 minuti: sposta il token in `credenzialiArchivio`, crea (o ritrova)
+la cartella. Se conferma un altro account (per esempio chi ha ricevuto un link di consenso inoltrato),
+il permesso viene ritirato su Google e il collegamento annullato.
 **Scollega** revoca il permesso su Google e cancella le credenziali; le foto restano nel Drive.
 
 Tutto il resto dell'app passa dall'interfaccia `Archivio` (`functions/src/archivio/`):
@@ -163,7 +169,7 @@ con cartella, data e autore; *Più recente / Più vecchia* per scorrere.
 ## Pulizia notturna
 
 La Function programmata `puliziaNotturna` (ogni notte alle 3:17, ora italiana) cancella i documenti
-tecnici scaduti: caricamenti aperti e mai registrati, collegamenti a Drive non completati, sessioni
+tecnici scaduti: caricamenti aperti e mai registrati, collegamenti a Drive non completati o non confermati, sessioni
 dell'archivio di prova e contatori dei tentativi di accesso fermi da più di 24 ore. Non tocca mai
 dati della ditta né l'indice foto. Con gli emulatori non parte da sola (serve l'emulatore Pub/Sub):
 la logica è provata in `tests/pulizia.test.ts`.

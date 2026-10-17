@@ -25,6 +25,8 @@ describe('pulizia notturna', () => {
       d.doc('collegamentiInCorso/scaduto').set({ dittaId: 'A', scadeIl: fra(-5) }),
       d.doc('collegamentiInCorso/valido').set({ dittaId: 'A', scadeIl: fra(5) }),
       d.doc('sessioniSimulate/scaduta').set({ dittaId: 'A', scadeIl: fra(-1) }),
+      d.doc('collegamentiDaConfermare/scaduto').set({ dittaId: 'A', scadeIl: fra(-1) }),
+      d.doc('collegamentiDaConfermare/valido').set({ dittaId: 'A', scadeIl: fra(5) }),
       d.doc('tentativiAccesso/vecchio').set({ falliti: 3, ultimoIl: fra(-25 * 60) }),
       d.doc('tentativiAccesso/recente').set({ falliti: 3, ultimoIl: fra(-60) }),
       // Dati della ditta e indice foto: mai toccati, anche con campi "vecchi".
@@ -33,12 +35,13 @@ describe('pulizia notturna', () => {
     ])
 
     const esito = await eseguiPulizia(d, ORA)
-    expect(esito).toEqual({ caricamenti: 1, collegamentiInCorso: 1, sessioniSimulate: 1, tentativiAccesso: 1 })
+    expect(esito).toEqual({ caricamenti: 1, collegamentiInCorso: 1, collegamentiDaConfermare: 1, sessioniSimulate: 1, tentativiAccesso: 1 })
 
     const esiste = async (p: string) => (await d.doc(p).get()).exists
     expect(await esiste('caricamenti/scaduto')).toBe(false)
     expect(await esiste('caricamenti/valido')).toBe(true)
     expect(await esiste('collegamentiInCorso/valido')).toBe(true)
+    expect(await esiste('collegamentiDaConfermare/valido')).toBe(true)
     expect(await esiste('tentativiAccesso/recente')).toBe(true)
     expect(await esiste('ditte/A')).toBe(true)
     expect(await esiste('ditte/A/foto/f1')).toBe(true)

@@ -23,9 +23,9 @@ const accesso = (c: Client, codiceDitta: string, codicePersonale: string) =>
   c.chiama<{ token: string }>('accessoOperatore', { codiceDitta, codicePersonale })
 
 describe('creaOperatore', () => {
-  it('crea un operatore attivo con un codice di 5 cifre, salvato solo come impronta', async () => {
+  it('crea un operatore attivo con un codice di 8 cifre, salvato solo come impronta', async () => {
     const { dittaId, mario } = await preparaDitta()
-    expect(mario.codice).toMatch(/^\d{5}$/)
+    expect(mario.codice).toMatch(/^\d{8}$/)
 
     const operatore = (await admin.db.doc(`ditte/${dittaId}/operatori/${mario.operatoreId}`).get()).data()!
     expect(operatore.nome).toBe('Mario')
@@ -79,7 +79,7 @@ describe('accessoOperatore', () => {
 
   it('codice personale sbagliato o ditta sbagliata: stesso messaggio generico', async () => {
     const { codiceDitta, mario } = await preparaDitta()
-    const sbagliato = String((Number(mario.codice) + 1) % 100000).padStart(5, '0')
+    const sbagliato = String((Number(mario.codice) + 1) % 100_000_000).padStart(8, '0')
     const e1 = await erroreDi(accesso(clientAnonimo(), codiceDitta, sbagliato))
     const e2 = await erroreDi(accesso(clientAnonimo(), 'ZZZZZZ', mario.codice))
     const e3 = await erroreDi(accesso(clientAnonimo(), 'corto', 'abc'))
@@ -103,7 +103,7 @@ describe('accessoOperatore', () => {
 
   it('dopo 5 errori blocca per 15 minuti, anche con il codice giusto', async () => {
     const { codiceDitta, mario } = await preparaDitta()
-    const sbagliato = mario.codice === '00000' ? '11111' : '00000'
+    const sbagliato = mario.codice === '00000000' ? '11111111' : '00000000'
     for (let i = 0; i < 5; i++) {
       expect((await erroreDi(accesso(clientAnonimo(), codiceDitta, sbagliato))).code).toBe('functions/permission-denied')
     }
@@ -117,7 +117,7 @@ describe('accessoOperatore', () => {
 
   it("un accesso riuscito azzera gli errori del dispositivo", async () => {
     const { codiceDitta, mario } = await preparaDitta()
-    const sbagliato = mario.codice === '00000' ? '11111' : '00000'
+    const sbagliato = mario.codice === '00000000' ? '11111111' : '00000000'
     for (let i = 0; i < 4; i++) await erroreDi(accesso(clientAnonimo(), codiceDitta, sbagliato))
     await accesso(clientAnonimo(), codiceDitta, mario.codice)
     for (let i = 0; i < 4; i++) await erroreDi(accesso(clientAnonimo(), codiceDitta, sbagliato))
@@ -180,7 +180,7 @@ describe('nuovoCodiceOperatore', () => {
   it('il vecchio codice smette di funzionare, il nuovo funziona', async () => {
     const { client, codiceDitta, mario } = await preparaDitta()
     const { codice } = await client.chiama<{ codice: string }>('nuovoCodiceOperatore', { operatoreId: mario.operatoreId })
-    expect(codice).toMatch(/^\d{5}$/)
+    expect(codice).toMatch(/^\d{8}$/)
     expect((await admin.db.collection('codiciOperatore').get()).size).toBe(1)
     if (codice !== mario.codice) {
       expect((await erroreDi(accesso(clientAnonimo(), codiceDitta, mario.codice))).code).toBe('functions/permission-denied')

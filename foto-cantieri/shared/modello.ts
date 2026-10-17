@@ -15,6 +15,7 @@
  *   codiciOperatore/{impronta}              CodiceOperatore
  *   credenzialiArchivio/{dittaId}           CredenzialiArchivio
  *   collegamentiInCorso/{stato}             { dittaId, uid, origine, scadeIl } (OAuth)
+ *   collegamentiDaConfermare/{impronta}     token Drive cifrato in attesa della conferma dall'app
  *   caricamenti/{idCaricamento}             caricamento aperto, in attesa di registraFoto
  *   cacheCartelle/{impronta}                id delle cartelle commessa/sottocartella
  *   sessioniSimulate/{sessione}             solo archivio di prova
@@ -130,8 +131,9 @@ export const SOTTOCARTELLE_PREDEFINITE = ['Prima', 'Durante', 'Dopo', 'Varie']
 /** Codice ditta: 6 caratteri, senza 0/O e 1/I/L per non confondersi. */
 export const ALFABETO_CODICE_DITTA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 export const LUNGHEZZA_CODICE_DITTA = 6
-/** Codice personale operatore: da 4 a 6 cifre. */
-export const CODICE_OPERATORE = /^[0-9]{4,6}$/
+/** Codice personale operatore: 8 cifre (100 milioni di combinazioni per ditta). */
+export const LUNGHEZZA_CODICE_OPERATORE = 8
+export const CODICE_OPERATORE = /^[0-9]{8}$/
 
 export const LIMITI = {
   nomeDitta: 80,

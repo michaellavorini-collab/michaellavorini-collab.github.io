@@ -176,3 +176,4 @@ label.pulsante { display: grid; place-items: center; cursor: pointer; }
 .messaggio.avviso { background: #fff6dc; color: #7a5a00; }
 .coda-azioni { display: grid; gap: 4px; }
 .coda-voce.riprova strong { color: #7a5a00; }
+.codice-grande.lungo { font-size: 2.1rem; letter-spacing: 0.12em; padding-left: 0.12em; white-space: nowrap; }

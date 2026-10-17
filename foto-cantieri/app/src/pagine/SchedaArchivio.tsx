@@ -12,23 +12,46 @@ const ESITI: Record<string, { testo: string; ok: boolean }> = {
   errore: { testo: 'Collegamento non riuscito. Riprova.', ok: false },
 }
 
-/** Esito del ritorno da Google (?drive=...), letto una volta e tolto dall'indirizzo. */
-function leggiEsito(): { testo: string; ok: boolean } | null {
+/**
+ * Ritorno da Google: "?drive=<esito>", e per la conferma anche "#conferma=<codice>".
+ * Si legge una volta sola, all'apertura della pagina, e si toglie subito dall'indirizzo.
+ */
+function leggiRitorno(): { esito: string; conferma: string | null } | null {
   const p = new URLSearchParams(window.location.search)
   const esito = p.get('drive')
   if (!esito) return null
+  const conferma = new URLSearchParams(window.location.hash.slice(1)).get('conferma')
   p.delete('drive')
   const resto = p.toString()
   window.history.replaceState(null, '', window.location.pathname + (resto ? `?${resto}` : ''))
-  return ESITI[esito] ?? ESITI.errore
+  return { esito, conferma }
 }
+const RITORNO = leggiRitorno()
+let confermaInviata = false
+
+const conferma = httpsCallable<{ conferma: string }, { account: string }>(functions, 'driveConfermaCollegamento')
 
 export default function SchedaArchivio({ archivio }: { archivio: InfoArchivio }) {
   const [esito, setEsito] = useState<{ testo: string; ok: boolean } | null>(null)
   const [errore, setErrore] = useState<string | null>(null)
   const [attesa, setAttesa] = useState(false)
 
-  useEffect(() => setEsito(leggiEsito()), [])
+  useEffect(() => {
+    if (!RITORNO) return
+    if (RITORNO.esito !== 'conferma') return setEsito(ESITI[RITORNO.esito] ?? ESITI.errore)
+    // Il collegamento si completa solo con la sessione del titolare che l'ha avviato.
+    if (confermaInviata || !RITORNO.conferma) return
+    confermaInviata = true
+    setAttesa(true)
+    setEsito({ testo: 'Completamento del collegamento…', ok: true })
+    conferma({ conferma: RITORNO.conferma }).then(
+      () => setEsito(ESITI.collegato),
+      (e) => {
+        setEsito(null)
+        setErrore(messaggioErrore(e))
+      },
+    ).finally(() => setAttesa(false))
+  }, [])
 
   async function esegui(azione: () => Promise<void>) {
     setErrore(null)

@@ -14,7 +14,7 @@ export const salute = onCall(() => ({
 export { creaDitta } from "./accesso/creaDitta";
 export { creaOperatore, nuovoCodiceOperatore, impostaOperatoreAttivo } from "./accesso/operatori";
 export { accessoOperatore } from "./accesso/accessoOperatore";
-export { driveAvviaCollegamento, driveRitorno, scollegaArchivio, collegaArchivioSimulato } from "./drive/collegamento";
+export { driveAvviaCollegamento, driveRitorno, driveConfermaCollegamento, scollegaArchivio, collegaArchivioSimulato } from "./drive/collegamento";
 export { apriCaricamento, registraFoto } from "./foto/caricamento";
 export { caricamentoSimulato } from "./foto/caricamentoSimulato";
 export { miniatura } from "./foto/miniatura";

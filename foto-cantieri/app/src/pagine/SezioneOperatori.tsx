@@ -57,7 +57,9 @@ export default function SezioneOperatori({ dittaId }: { dittaId: string }) {
       {codiceMostrato && (
         <section className="scheda evidenza" role="status">
           <p>Codice personale di <strong>{codiceMostrato.nome}</strong>:</p>
-          <p className="codice-grande">{codiceMostrato.codice}</p>
+          <p className="codice-grande lungo" aria-label={`Codice ${[...codiceMostrato.codice].join(' ')}`}>
+            {codiceMostrato.codice.replace(/(\d{4})(?=\d)/g, '$1 ')}
+          </p>
           <p className="tenue">Annotalo e consegnalo all'operatore: per sicurezza non sarà più visibile.</p>
           <button className="pulsante secondario" onClick={() => setCodiceMostrato(null)}>Fatto</button>
         </section>

@@ -10,8 +10,9 @@ const CONSERVA_TENTATIVI_ORE = 24;
 const SCADUTI = [
   // Caricamenti aperti e mai registrati (il telefono non ha finito).
   { raccolta: "caricamenti", campo: "scadeIl" },
-  // Collegamenti a Google Drive iniziati e non completati.
+  // Collegamenti a Google Drive iniziati e non completati, o mai confermati dall'app.
   { raccolta: "collegamentiInCorso", campo: "scadeIl" },
+  { raccolta: "collegamentiDaConfermare", campo: "scadeIl" },
   // Sessioni dell'archivio di prova (solo sviluppo).
   { raccolta: "sessioniSimulate", campo: "scadeIl" },
 ] as const;

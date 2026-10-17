@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { onCall, onRequest } from "firebase-functions/v2/https";
@@ -98,24 +98,102 @@ export const driveRitorno = onRequest(
     if (titolare.get("dittaId") !== voce.dittaId) return torna("errore");
 
     try {
-      const config = configOAuth();
-      const { refreshToken, accessToken, scadeIl } = await scambiaCodice(config, codice);
-      const archivio = new GoogleDriveArchivio(config, refreshToken, { accessToken, scadeIl });
-      const ditta = (await db().doc(`ditte/${voce.dittaId}`).get()).data() as Ditta;
-      const radice = await cartellaRadice(archivio, ditta.archivio);
-      const account = await archivio.account();
-
-      await db().doc(`credenzialiArchivio/${voce.dittaId}`).set({
-        tipo: "googleDrive",
+      const { refreshToken } = await scambiaCodice(configOAuth(), codice);
+      // Non si collega ancora: il token resta in attesa, cifrato, finché l'app non conferma
+      // con la sessione dello stesso titolare (vedi driveConfermaCollegamento).
+      const conferma = randomBytes(32).toString("base64url");
+      const daConfermare: DaConfermare = {
+        dittaId: voce.dittaId,
+        uid: voce.uid,
         cifrato: cifra(refreshToken, voce.dittaId, CHIAVE_CIFRATURA_ARCHIVIO.value()),
-        aggiornateIl: FieldValue.serverTimestamp(),
-      });
-      await salvaCollegamento(voce.dittaId, "googleDrive", account, radice);
-      logger.info("Google Drive collegato", { dittaId: voce.dittaId });
-      return torna("collegato");
+        scadeIl: Timestamp.fromMillis(Date.now() + VALIDITA_CONFERMA_MINUTI * 60_000),
+      };
+      await db().doc(`collegamentiDaConfermare/${improntaConferma(conferma)}`).create(daConfermare);
+      // Il codice di conferma va dopo "#": resta nel browser, non arriva a nessun server.
+      return res.redirect(303, `${voce.origine}/?drive=conferma#conferma=${conferma}`);
     } catch (e) {
       logger.error("Collegamento Google Drive non riuscito", { dittaId: voce.dittaId, errore: String(e) });
       return torna(e instanceof ErroreOAuth && e.motivo === "permesso-mancante" ? "permesso-mancante" : "errore");
+    }
+  },
+);
+
+/** Collegamento autorizzato su Google, in attesa della conferma dall'app (raccolta riservata). */
+export interface DaConfermare {
+  dittaId: string;
+  uid: string;
+  cifrato: string;
+  scadeIl: Timestamp;
+}
+
+/** Minuti entro cui l'app deve confermare il collegamento dopo il ritorno da Google. */
+const VALIDITA_CONFERMA_MINUTI = 10;
+
+export function improntaConferma(conferma: string): string {
+  return createHash("sha256").update(conferma).digest("hex");
+}
+
+/**
+ * Chi conferma deve essere lo stesso titolare, della stessa ditta, che ha avviato il collegamento,
+ * ed entro il tempo massimo. Così un link di consenso inoltrato a un'altra persona non collega
+ * il Drive di quella persona alla ditta di chi l'ha inoltrato.
+ */
+export function esitoConferma(voce: Pick<DaConfermare, "uid" | "dittaId" | "scadeIl">, uid: string, dittaId: string, ora = Date.now()):
+  "ok" | "altro-account" | "scaduta" {
+  if (voce.uid !== uid || voce.dittaId !== dittaId) return "altro-account";
+  if (voce.scadeIl.toMillis() < ora) return "scaduta";
+  return "ok";
+}
+
+/**
+ * L'app, tornata da Google con il codice di conferma, completa il collegamento.
+ * Riceve: { conferma }. Restituisce: { account }.
+ */
+export const driveConfermaCollegamento = onCall(
+  { secrets: [GOOGLE_CLIENT_SECRET, CHIAVE_CIFRATURA_ARCHIVIO] },
+  async (req) => {
+    const dittaId = richiediTitolare(req);
+    const conferma = typeof req.data?.conferma === "string" ? req.data.conferma : "";
+    if (!/^[A-Za-z0-9_-]{20,100}$/.test(conferma)) throw errore("invalid-argument", "Conferma non valida.");
+
+    // La conferma si consuma una volta sola.
+    const rif = db().doc(`collegamentiDaConfermare/${improntaConferma(conferma)}`);
+    const voce = await db().runTransaction(async (tx) => {
+      const d = await tx.get(rif);
+      if (d.exists) tx.delete(rif);
+      return d.data() as DaConfermare | undefined;
+    });
+    if (!voce) throw errore("not-found", "Collegamento scaduto o già usato: riprova da «Collega Google Drive».");
+
+    const refreshToken = decifra(voce.cifrato, voce.dittaId, CHIAVE_CIFRATURA_ARCHIVIO.value());
+    const esito = esitoConferma(voce, req.auth!.uid, dittaId);
+    if (esito !== "ok") {
+      // Per sicurezza il permesso appena dato su Google viene ritirato.
+      await revocaToken(refreshToken);
+      if (esito === "altro-account") {
+        logger.warn("Conferma del collegamento da un altro account: annullato", { dittaVoce: voce.dittaId, dittaChiamante: dittaId });
+        throw errore("permission-denied", "Questo collegamento è stato avviato da un altro account: per sicurezza è stato annullato.");
+      }
+      throw errore("deadline-exceeded", "Collegamento scaduto: riprova da «Collega Google Drive».");
+    }
+
+    try {
+      const archivio = new GoogleDriveArchivio(configOAuth(), refreshToken);
+      const ditta = (await db().doc(`ditte/${dittaId}`).get()).data() as Ditta;
+      const radice = await cartellaRadice(archivio, ditta.archivio);
+      const account = await archivio.account();
+      await db().doc(`credenzialiArchivio/${dittaId}`).set({
+        tipo: "googleDrive",
+        cifrato: voce.cifrato,
+        aggiornateIl: FieldValue.serverTimestamp(),
+      });
+      await salvaCollegamento(dittaId, "googleDrive", account, radice);
+      logger.info("Google Drive collegato", { dittaId });
+      return { account };
+    } catch (e) {
+      logger.error("Conferma del collegamento non riuscita", { dittaId, errore: String(e) });
+      await revocaToken(refreshToken);
+      throw errore("unavailable", "Google Drive non risponde: riprova il collegamento tra poco.");
     }
   },
 );

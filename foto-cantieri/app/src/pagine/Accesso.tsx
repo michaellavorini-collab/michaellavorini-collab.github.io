@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { GoogleAuthProvider, signInWithCustomToken, signInWithPopup, signInWithRedirect } from 'firebase/auth'
 import { FirebaseError } from 'firebase/app'
 import { httpsCallable } from 'firebase/functions'
-import { LUNGHEZZA_CODICE_DITTA, normalizzaCodiceDitta } from '../../../shared/modello'
+import { LUNGHEZZA_CODICE_DITTA, LUNGHEZZA_CODICE_OPERATORE, normalizzaCodiceDitta } from '../../../shared/modello'
 import { auth, functions } from '../firebase'
 import { messaggioErrore } from '../errori'
 import { useSessione } from '../sessione'
@@ -93,13 +93,13 @@ export default function Accesso() {
             type="password"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={6}
+            maxLength={LUNGHEZZA_CODICE_OPERATORE}
             autoComplete="current-password"
             className="input-codice"
             required
           />
         </label>
-        <button className="pulsante" disabled={attesa !== null || !codiceDitta.trim() || codicePersonale.length < 4}>
+        <button className="pulsante" disabled={attesa !== null || !codiceDitta.trim() || codicePersonale.length !== LUNGHEZZA_CODICE_OPERATORE}>
           {attesa === 'operatore' ? 'Accesso in corso…' : 'Entra'}
         </button>
         <Errore testo={errore} />
