@@ -18,3 +18,4 @@ export { driveAvviaCollegamento, driveRitorno, scollegaArchivio, collegaArchivio
 export { apriCaricamento, registraFoto } from "./foto/caricamento";
 export { caricamentoSimulato } from "./foto/caricamentoSimulato";
 export { miniatura } from "./foto/miniatura";
+export { puliziaNotturna } from "./manutenzione/pulizia";
