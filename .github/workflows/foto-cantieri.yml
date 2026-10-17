@@ -3,7 +3,9 @@
 name: Foto Cantieri
 
 on:
+  # Sui rami di lavoro basta la pull request (evita di eseguire tutto due volte).
   push:
+    branches: [main]
     paths: ['foto-cantieri/**', '.github/workflows/foto-cantieri.yml']
   pull_request:
     paths: ['foto-cantieri/**', '.github/workflows/foto-cantieri.yml']
