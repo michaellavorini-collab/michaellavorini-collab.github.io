@@ -6,6 +6,7 @@ import { messaggioErrore } from '../errori'
 import { useSessione } from '../sessione'
 import { Caricamento, Errore, Pagina } from '../componenti'
 import PaginaScatto from './PaginaScatto'
+import { useCoda } from '../servizi/coda'
 
 const DISATTIVATO = 'Il tuo accesso è stato disattivato. Rivolgiti al titolare.'
 
@@ -17,6 +18,7 @@ export default function HomeOperatore() {
   const [commesse, setCommesse] = useState<(Commessa & { id: string })[] | null>(null)
   const [errore, setErrore] = useState<string | null>(null)
   const [sceltaId, setSceltaId] = useState<string | null>(null)
+  const inCoda = useCoda().filter((v) => v.fase !== 'fatto')
 
   useEffect(() => {
     // Se il titolare lo disattiva, le regole rifiutano subito le letture: si esce.
@@ -47,6 +49,12 @@ export default function HomeOperatore() {
   return (
     <Pagina titolo={`Ciao ${operatore.nome}`}>
       <p className="sottotitolo">{ditta.nome}</p>
+      {inCoda.length > 0 && (
+        <p className={inCoda.some((v) => v.fase === 'errore') ? 'messaggio errore' : 'messaggio avviso'} role="status">
+          {inCoda.length === 1 ? '1 foto da inviare' : `${inCoda.length} foto da inviare`}
+          {inCoda.some((v) => v.fase === 'errore') ? ': alcune hanno bisogno di te, apri la commessa.' : ': partiranno da sole.'}
+        </p>
+      )}
       <section className="scheda">
         <h2>Scegli la commessa</h2>
         {commesse.length === 0 && <p>Nessuna commessa attiva. Chiedi al titolare di aggiungerne una.</p>}

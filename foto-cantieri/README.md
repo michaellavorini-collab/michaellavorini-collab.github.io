@@ -125,8 +125,15 @@ L'operatore sceglie la commessa, la cartella (Prima / Durante / Dopo / Varie) e 
 4. `registraFoto` verifica su Drive che il file esista, nella cartella giusta e con la dimensione attesa,
    e scrive la voce in `ditte/{dittaId}/foto`. Si può ripetere senza creare doppioni.
 
-Se la connessione cade compare **Riprova**: si riparte dall'ultimo passo riuscito
-(se la foto era già arrivata su Drive, si rifà solo la registrazione).
+**Coda sul telefono**: ogni foto, appena compressa, viene salvata nel telefono (IndexedDB) insieme
+al passo raggiunto, e viene tolta solo quando è registrata. Un unico motore invia una foto alla volta:
+- senza campo la foto resta *In attesa* e parte da sola quando torna la rete;
+- se si chiude l'app, la coda riparte al prossimo accesso dello stesso utente;
+- errori temporanei: nuovi tentativi automatici (5 s, 15 s, 30 s… fino a 5 minuti);
+- errori da risolvere (commessa chiusa, accesso disattivato): *Riprova* o *Elimina*;
+- se la foto era già arrivata su Drive, si rifà solo la registrazione; se il caricamento è scaduto
+  si rimanda la foto da capo (al massimo 3 volte).
+La pagina iniziale dell'operatore mostra quante foto sono ancora da inviare.
 
 Nome dei file: `<commessa>_<cartella>_<AAAAMMGG-hhmmss>_<casuale>.jpg` (ora italiana dello scatto).
 
@@ -153,6 +160,14 @@ con cartella, data e autore; *Più recente / Più vecchia* per scorrere.
   (`Cache-Control: private`). Se Drive non ha ancora pronta la miniatura, passa la foto stessa.
 - CORS solo per gli indirizzi in `ORIGINI_APP`.
 
+## Pulizia notturna
+
+La Function programmata `puliziaNotturna` (ogni notte alle 3:17, ora italiana) cancella i documenti
+tecnici scaduti: caricamenti aperti e mai registrati, collegamenti a Drive non completati, sessioni
+dell'archivio di prova e contatori dei tentativi di accesso fermi da più di 24 ore. Non tocca mai
+dati della ditta né l'indice foto. Con gli emulatori non parte da sola (serve l'emulatore Pub/Sub):
+la logica è provata in `tests/pulizia.test.ts`.
+
 ## Struttura
 
 ```
@@ -167,7 +182,8 @@ foto-cantieri/
 │       ├── firebase.ts     inizializzazione e collegamento agli emulatori
 │       ├── sessione.tsx    utente collegato, ditta e ruolo dal token
 │       ├── App.tsx         sceglie la pagina in base alla sessione
-│       ├── servizi/        compressione (1600 px JPEG), caricamento (PUT diretta), miniature
+│       ├── servizi/        compressione (1600 px JPEG), caricamento (PUT diretta), miniature,
+│       │                   coda (invio in sottofondo), memoria (IndexedDB del telefono)
 │       └── pagine/         Accesso, CreaDitta, HomeTitolare (+ SezioneOperatori,
 │                           SezioneCommesse, SchedaArchivio), HomeOperatore, PaginaScatto, Galleria
 ├── functions/              Cloud Functions in TypeScript (regione europe-west1)
@@ -179,7 +195,8 @@ foto-cantieri/
 │       │                   codiciOperatore (impronte), tentativi (blocco errori)
 │       ├── archivio/       Archivio (interfaccia), GoogleDriveArchivio, ArchivioSimulato, fabbrica
 │       ├── drive/          oauth (Google), config (client e origini), collegamento (Functions)
-│       └── foto/           apriCaricamento/registraFoto, cartelle, miniatura, caricamentoSimulato
+│       ├── foto/           apriCaricamento/registraFoto, cartelle, miniatura, caricamentoSimulato
+│       └── manutenzione/   pulizia notturna
 ├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
@@ -190,6 +207,7 @@ foto-cantieri/
     ├── collegamento.test.ts collegamento/scollegamento archivio, stato OAuth monouso
     ├── caricamento.test.ts caricamento foto: percorso completo e controlli
     ├── galleria.test.ts    miniature solo in transito, permessi, paginazione 12 alla volta
+    ├── pulizia.test.ts     pulizia notturna dei documenti temporanei
     └── aiuti*.ts           strumenti comuni alle prove
 ```
 

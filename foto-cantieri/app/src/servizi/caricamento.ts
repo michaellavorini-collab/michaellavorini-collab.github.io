@@ -34,24 +34,14 @@ export function inviaByte(url: string, blob: Blob, avanzamento: (frazione: numbe
   })
 }
 
-export type Fase = 'attesa' | 'compressione' | 'invio' | 'registrazione' | 'fatto' | 'errore'
-
-/** Stato di una foto in coda. Si riprende dall'ultimo passo riuscito. */
-export interface FotoInCoda {
-  id: string
-  originale: File
-  fase: Fase
-  avanzamento: number
-  errore?: string
-  anteprima?: string
-  compressa?: { blob: Blob; larghezza: number; altezza: number }
-  idCaricamento?: string
-  urlCaricamento?: string
-  fileId?: string
+/** Apre il caricamento (Function apriCaricamento). */
+export async function apriCaricamento(dati: {
+  commessaId: string; sottocartella: string; dimensione: number; larghezza: number; altezza: number; scattataIl: number
+}) {
+  return (await apri(dati)).data
 }
 
-export const passi = {
-  apri: (commessaId: string, sottocartella: string, f: NonNullable<FotoInCoda['compressa']>, scattataIl: number) =>
-    apri({ commessaId, sottocartella, dimensione: f.blob.size, larghezza: f.larghezza, altezza: f.altezza, scattataIl }),
-  registra: (idCaricamento: string, fileId: string) => registra({ idCaricamento, fileId }),
+/** Registra la foto nell'indice (Function registraFoto). */
+export async function registraFoto(idCaricamento: string, fileId: string) {
+  return (await registra({ idCaricamento, fileId })).data
 }

@@ -172,3 +172,7 @@ label.pulsante { display: grid; place-items: center; cursor: pointer; }
 .visore-info { margin: 0; text-align: center; color: #d5dbe1; }
 .visore-comandi { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .visore .pulsante.secondario { background: transparent; color: #fff; border-color: #fff; }
+
+.messaggio.avviso { background: #fff6dc; color: #7a5a00; }
+.coda-azioni { display: grid; gap: 4px; }
+.coda-voce.riprova strong { color: #7a5a00; }
