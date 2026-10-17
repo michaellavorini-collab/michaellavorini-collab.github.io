@@ -22,6 +22,7 @@ Dalla cartella `foto-cantieri/`:
 | `npm run emulatori` | Compila le Functions e avvia gli emulatori. I dati restano in `.dati-emulatori/` tra un avvio e l'altro |
 | `npm run app` | Avvia l'app (Vite) su http://localhost:5173 |
 | `npm test` | Avvia gli emulatori, esegue le prove in `tests/` e li spegne |
+| `npm run test:e2e` | Prove end-to-end nel browser (Playwright, telefono simulato) con emulatori e archivio di prova |
 
 Pannello degli emulatori: http://localhost:4000
 
@@ -174,6 +175,27 @@ dell'archivio di prova e contatori dei tentativi di accesso fermi da più di 24 
 dati della ditta né l'indice foto. Con gli emulatori non parte da sola (serve l'emulatore Pub/Sub):
 la logica è provata in `tests/pulizia.test.ts`.
 
+## Prove end-to-end e CI
+
+`npm run test:e2e` avvia emulatori e app e ripete nel browser (Chromium che simula un Pixel 7)
+i percorsi principali, con l'archivio di prova:
+
+| File | Cosa prova |
+|---|---|
+| `e2e/accessi.spec.ts` | titolare e operatore, codice sbagliato, disattivazione immediata, riattivazione, sessione dopo ricarica |
+| `e2e/foto.spec.ts` | caricamento (1600 px, rotazione, EXIF tolti, cartelle giuste); galleria 12 alla volta, vista grande, titolare |
+| `e2e/coda.spec.ts` | foto senza rete, ripresa al ritorno della rete e dopo la chiusura dell'app; *Riprova* dopo un invio interrotto |
+| `e2e/collegamento.spec.ts` | un link di consenso Google inoltrato viene annullato |
+
+La prima volta serve il browser: `npx playwright install chromium`.
+Il login Google del titolare nelle prove usa una credenziale di prova dell'emulatore (non la finestra di Google).
+Se una prova fallisce, `npx playwright show-report` mostra passaggi, schermate e traccia.
+
+**CI**: `.github/workflows/foto-cantieri.yml` (GitHub Actions) a ogni push e pull request che tocca
+`foto-cantieri/` esegue: build dell'app con controllo dei tipi, `npm test` e `npm run test:e2e`.
+Usa solo gli emulatori e segreti di prova generati al momento: nessun progetto o segreto reale.
+In caso di errore il rapporto delle prove end-to-end si scarica dalla pagina dell'esecuzione.
+
 ## Struttura
 
 ```
@@ -204,6 +226,8 @@ foto-cantieri/
 │       ├── foto/           apriCaricamento/registraFoto, cartelle, miniatura, caricamentoSimulato
 │       └── manutenzione/   pulizia notturna
 ├── scripts/                prepara-segreti.mjs (segreti locali per gli emulatori)
+├── e2e/                    prove end-to-end Playwright (+ foto/ di prova)
+├── playwright.config.ts    configurazione delle prove end-to-end
 ├── shared/modello.ts       modello dati e costanti, usati da app e Functions
 └── tests/                  prove con gli emulatori (vitest)
     ├── regole.test.ts      regole di sicurezza Firestore

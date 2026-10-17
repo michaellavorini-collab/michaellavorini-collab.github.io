@@ -5,3 +5,5 @@ functions/lib/
 .archivio-simulato/
 *.local
 *-debug.log
+test-results/
+playwright-report/
