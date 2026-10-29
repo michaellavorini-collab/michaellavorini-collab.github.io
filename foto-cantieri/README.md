@@ -105,9 +105,13 @@ Nella Google Cloud Console, client OAuth di tipo **Applicazione web**:
 - schermata di consenso: aggiungi il tuo account tra gli **utenti di test**; ambito `.../auth/drive.file`
 - abilita la **Google Drive API** nel progetto.
 
-Poi, sul tuo computer (file esclusi da git, creati al primo avvio degli emulatori):
-- `functions/.env.local` → `GOOGLE_CLIENT_ID=...apps.googleusercontent.com`
-- `functions/.secret.local` → `GOOGLE_CLIENT_SECRET=...`
+Poi, sul tuo computer, scarica il JSON del client (`client_secret_….json`) e lancia:
+```
+node scripts/importa-credenziali-google.mjs
+```
+Prende il file più recente dalla cartella Download (oppure il percorso che gli passi) e scrive
+`GOOGLE_CLIENT_ID` in `functions/.env.local` e `GOOGLE_CLIENT_SECRET` in `functions/.secret.local`,
+senza mai stampare il secret; controlla anche che i due file siano esclusi da git.
 
 Riavvia gli emulatori. Se apri l'app da un altro indirizzo (es. dal telefono `http://192.168.1.20:5173`)
 aggiungilo a `ORIGINI_APP` in `functions/.env.local`.
