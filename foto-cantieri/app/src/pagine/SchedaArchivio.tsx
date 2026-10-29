@@ -74,7 +74,13 @@ export default function SchedaArchivio({ archivio }: { archivio: InfoArchivio })
   const collegaProva = () => esegui(async () => void (await httpsCallable(functions, 'collegaArchivioSimulato')()))
   const scollega = () =>
     esegui(async () => {
-      if (!confirm('Scollegare l\'archivio? Le foto già salvate restano nel tuo Drive, ma non se ne potranno caricare altre.')) return
+      // Il messaggio dice chiaramente cosa succede: "Scollega" non è "Esci".
+      if (!confirm(
+        `Vuoi davvero scollegare ${nomeTipo} dalla ditta?\n\n` +
+        'Gli operatori non potranno più caricare foto finché non lo ricolleghi. ' +
+        'Le foto già salvate restano nel tuo Drive.\n\n' +
+        'Per uscire dall\'app premi Annulla e usa «Esci».',
+      )) return
       await httpsCallable(functions, 'scollegaArchivio')()
     })
 
@@ -102,7 +108,9 @@ export default function SchedaArchivio({ archivio }: { archivio: InfoArchivio })
               Apri la cartella su Drive
             </a>
           )}
-          <button className="pulsante testo" onClick={scollega} disabled={attesa}>Scollega</button>
+          <button className="pulsante testo rischio" onClick={scollega} disabled={attesa}>
+            Scollega {nomeTipo}
+          </button>
         </>
       ) : (
         <>
