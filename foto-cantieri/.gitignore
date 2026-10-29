@@ -7,3 +7,5 @@ functions/lib/
 *-debug.log
 test-results/
 playwright-report/
+# File delle credenziali OAuth scaricato da Google Cloud: mai su git
+client_secret_*.json
